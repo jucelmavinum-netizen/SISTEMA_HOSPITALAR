@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@theme {
+  --color-navy: #1e3a8a;
+  --color-emerald: #10b981;
+  --color-manchester-red: #ef4444;
+  --color-manchester-orange: #f97316;
+  --color-manchester-yellow: #eab308;
+  --color-manchester-green: #22c55e;
+  --color-manchester-blue: #3b82f6;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900;
+  }
+}
+
+.manchester-red { @apply bg-manchester-red text-white; }
+.manchester-orange { @apply bg-manchester-orange text-white; }
+.manchester-yellow { @apply bg-manchester-yellow text-slate-900; }
+.manchester-green { @apply bg-manchester-green text-white; }
+.manchester-blue { @apply bg-manchester-blue text-white; }
