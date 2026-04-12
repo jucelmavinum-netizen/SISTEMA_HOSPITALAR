@@ -8,6 +8,31 @@ export interface Patient {
   gender: 'M' | 'F';
   isTemporary?: boolean;
   qrCode?: string;
+  contact?: string;
+  bloodType?: string;
+  allergies?: string[];
+}
+
+export interface Appointment {
+  id: string;
+  patientId: string;
+  patientName: string;
+  doctorId: string;
+  doctorName: string;
+  dateTime: string;
+  status: 'scheduled' | 'completed' | 'cancelled' | 'waiting';
+  type: 'Consulta' | 'Retorno' | 'Exame';
+}
+
+export interface Exam {
+  id: string;
+  patientId: string;
+  patientName: string;
+  type: string;
+  status: 'pending' | 'processing' | 'ready';
+  result?: string;
+  date: string;
+  requester: string;
 }
 
 export interface TriageRecord {

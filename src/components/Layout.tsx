@@ -16,7 +16,9 @@ import {
   Users,
   PackageSearch,
   BarChart3,
-  Wallet
+  Wallet,
+  Calendar as CalendarIcon,
+  FlaskConical
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -29,6 +31,7 @@ interface LayoutProps {
     province: string;
     municipality: string;
     hospital: string;
+    role: string;
   };
   onLogout: () => void;
 }
@@ -36,10 +39,19 @@ interface LayoutProps {
 export default function Layout({ children, activeTab, setActiveTab, isOffline, user, onLogout }: LayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
 
+  const roleLabels: Record<string, string> = {
+    admin: 'Administrador',
+    doctor: 'Médico',
+    nurse: 'Enfermeiro',
+    reception: 'Recepção'
+  };
+
   const menuItems = [
     { id: 'dashboard', label: 'Gestão de Enchentes', icon: LayoutDashboard },
     { id: 'registry', label: 'Registro e Biometria', icon: UserPlus },
+    { id: 'scheduling', label: 'Agendamento', icon: CalendarIcon },
     { id: 'triage', label: 'Triagem Dinâmica', icon: Stethoscope },
+    { id: 'laboratory', label: 'Laboratório', icon: FlaskConical },
     { id: 'beds', label: 'Censo e Leitos', icon: BedDouble },
     { id: 'pharmacy', label: 'Farmácia e Stock', icon: Pill },
     { id: 'hr', label: 'Recursos Humanos', icon: Users },
@@ -135,7 +147,8 @@ export default function Layout({ children, activeTab, setActiveTab, isOffline, u
             <div className="flex items-center gap-3 pl-6 border-l border-slate-200">
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-bold text-slate-900 leading-none">{user.hospital}</p>
-                <p className="text-xs text-slate-500 mt-1">{user.municipality}, {user.province}</p>
+                <p className="text-[10px] text-emerald font-bold uppercase mt-1">{roleLabels[user.role] || user.role}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">{user.municipality}, {user.province}</p>
               </div>
               <button 
                 onClick={onLogout}

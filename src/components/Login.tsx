@@ -33,6 +33,7 @@ export default function Login({ onLogin }: LoginProps) {
   const [province, setProvince] = React.useState('');
   const [municipality, setMunicipality] = React.useState('');
   const [hospital, setHospital] = React.useState('');
+  const [role, setRole] = React.useState('admin');
   const [password, setPassword] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
 
@@ -41,7 +42,7 @@ export default function Login({ onLogin }: LoginProps) {
     setIsLoading(true);
     // Simulate API call
     setTimeout(() => {
-      onLogin({ province, municipality, hospital });
+      onLogin({ province, municipality, hospital, role });
       setIsLoading(false);
     }, 1500);
   };
@@ -153,6 +154,24 @@ export default function Login({ onLogin }: LoginProps) {
                   >
                     <option value="">Selecione o Hospital</option>
                     {hospitals.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Perfil de Acesso</label>
+                <div className="relative">
+                  <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
+                  <select 
+                    required
+                    value={role}
+                    onChange={(e) => setRole(e.target.value)}
+                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald focus:bg-white transition-all appearance-none font-medium text-slate-700"
+                  >
+                    <option value="admin">Administrador</option>
+                    <option value="doctor">Médico / Especialista</option>
+                    <option value="nurse">Enfermeiro / Triagem</option>
+                    <option value="reception">Recepção / Atendimento</option>
                   </select>
                 </div>
               </div>

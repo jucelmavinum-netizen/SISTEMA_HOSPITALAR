@@ -15,6 +15,8 @@ import PharmacyStock from './components/PharmacyStock';
 import HumanResources from './components/HumanResources';
 import Statistics from './components/Statistics';
 import Finance from './components/Finance';
+import Scheduling from './components/Scheduling';
+import Laboratory from './components/Laboratory';
 
 export default function App() {
   const [activeTab, setActiveTab] = React.useState('dashboard');
@@ -54,8 +56,12 @@ export default function App() {
         return <Dashboard />;
       case 'registry':
         return <Registry />;
+      case 'scheduling':
+        return <Scheduling />;
       case 'triage':
         return <Triage />;
+      case 'laboratory':
+        return <Laboratory />;
       case 'beds':
         return <BedsManagement />;
       case 'pharmacy':
