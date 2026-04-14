@@ -5,51 +5,36 @@ import {
   Hospital, 
   ChevronRight,
   ShieldCheck,
-  Globe
+  Globe,
+  Mail,
+  AlertCircle
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
+import { supabase } from '../lib/supabase';
 
-interface LoginProps {
-  onLogin: (data: any) => void;
-}
-
-const angolaData = {
-  'Luanda': {
-    municipalities: ['Luanda', 'Belas', 'Cazenga', 'Cacuaco', 'Viana', 'Talatona', 'Kilamba Kiaxi'],
-    hospitals: ['Hospital Josina Machel', 'Hospital Geral de Luanda', 'Maternidade Lucrécia Paim', 'Hospital Américo Boavida']
-  },
-  'Benguela': {
-    municipalities: ['Benguela', 'Lobito', 'Baía Farta', 'Catumbela'],
-    hospitals: ['Hospital Geral de Benguela', 'Hospital Municipal do Lobito']
-  },
-  'Huíla': {
-    municipalities: ['Lubango', 'Humpata', 'Chibia'],
-    hospitals: ['Hospital Central do Lubango', 'Hospital Geral da Huíla']
-  }
-};
-
-export default function Login({ onLogin }: LoginProps) {
-  const [province, setProvince] = React.useState('');
-  const [municipality, setMunicipality] = React.useState('');
-  const [hospital, setHospital] = React.useState('');
-  const [role, setRole] = React.useState('admin');
+export default function Login() {
+  const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      onLogin({ province, municipality, hospital, role });
-      setIsLoading(false);
-    }, 1500);
-  };
+    setError(null);
 
-  const provinces = Object.keys(angolaData);
-  const municipalities = province ? angolaData[province as keyof typeof angolaData].municipalities : [];
-  const hospitals = province ? angolaData[province as keyof typeof angolaData].hospitals : [];
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      setError(error.message === 'Invalid login credentials' ? 'Credenciais inválidas. Verifique seu email e senha.' : error.message);
+      setIsLoading(false);
+    }
+    // App.tsx handles the session change
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans">
@@ -99,80 +84,34 @@ export default function Login({ onLogin }: LoginProps) {
         <div className="p-12 lg:p-20 flex flex-col justify-center">
           <div className="max-w-md mx-auto w-full space-y-8">
             <div>
-              <h3 className="text-3xl font-bold text-slate-900">Bem-vindo de volta</h3>
-              <p className="text-slate-500 mt-2">Selecione sua unidade para acessar o sistema.</p>
+              <h3 className="text-3xl font-bold text-slate-900">Acesso ao Sistema</h3>
+              <p className="text-slate-500 mt-2">Entre com suas credenciais institucionais.</p>
             </div>
+
+            {error && (
+              <motion.div 
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 text-sm font-medium"
+              >
+                <AlertCircle className="w-5 h-5 shrink-0" />
+                {error}
+              </motion.div>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Província</label>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Email Institucional</label>
                 <div className="relative">
-                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
-                  <select 
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
+                  <input 
                     required
-                    value={province}
-                    onChange={(e) => {
-                      setProvince(e.target.value);
-                      setMunicipality('');
-                      setHospital('');
-                    }}
-                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald focus:bg-white transition-all appearance-none font-medium text-slate-700"
-                  >
-                    <option value="">Selecione a Província</option>
-                    {provinces.map(p => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Município</label>
-                <div className="relative">
-                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
-                  <select 
-                    required
-                    disabled={!province}
-                    value={municipality}
-                    onChange={(e) => setMunicipality(e.target.value)}
-                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald focus:bg-white transition-all appearance-none font-medium text-slate-700 disabled:opacity-50"
-                  >
-                    <option value="">Selecione o Município</option>
-                    {municipalities.map(m => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Unidade Hospitalar</label>
-                <div className="relative">
-                  <Hospital className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
-                  <select 
-                    required
-                    disabled={!municipality}
-                    value={hospital}
-                    onChange={(e) => setHospital(e.target.value)}
-                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald focus:bg-white transition-all appearance-none font-medium text-slate-700 disabled:opacity-50"
-                  >
-                    <option value="">Selecione o Hospital</option>
-                    {hospitals.map(h => <option key={h} value={h}>{h}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Perfil de Acesso</label>
-                <div className="relative">
-                  <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
-                  <select 
-                    required
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
-                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald focus:bg-white transition-all appearance-none font-medium text-slate-700"
-                  >
-                    <option value="admin">Administrador</option>
-                    <option value="doctor">Médico / Especialista</option>
-                    <option value="nurse">Enfermeiro / Triagem</option>
-                    <option value="reception">Recepção / Atendimento</option>
-                  </select>
+                    type="email" 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="exemplo@minsa.gov.ao"
+                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald focus:bg-white transition-all font-medium text-slate-700"
+                  />
                 </div>
               </div>
 
@@ -207,9 +146,11 @@ export default function Login({ onLogin }: LoginProps) {
               </button>
             </form>
 
-            <p className="text-center text-sm text-slate-400">
-              Problemas com o acesso? <button className="text-emerald font-bold hover:underline">Contate o suporte técnico MINSA</button>
-            </p>
+            <div className="pt-6 border-t border-slate-100">
+              <p className="text-center text-sm text-slate-400">
+                Problemas com o acesso? <button className="text-emerald font-bold hover:underline">Contate o suporte técnico MINSA</button>
+              </p>
+            </div>
           </div>
         </div>
       </div>

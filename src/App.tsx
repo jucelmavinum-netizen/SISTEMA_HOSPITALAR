@@ -4,7 +4,8 @@
  */
 
 import React from 'react';
-import { Lock } from 'lucide-react';
+import { Lock, Loader2 } from 'lucide-react';
+import { supabase } from './lib/supabase';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import Registry from './components/Registry';
@@ -24,6 +25,43 @@ export default function App() {
   const [activeTab, setActiveTab] = React.useState('dashboard');
   const [isOffline, setIsOffline] = React.useState(false);
   const [user, setUser] = React.useState<any>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  // Supabase Session Listener
+  React.useEffect(() => {
+    const fetchProfile = async (userId: string) => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      
+      if (data) {
+        setUser(data);
+        if (data.role === 'reception') setActiveTab('admission');
+      }
+      setIsLoading(false);
+    };
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        fetchProfile(session.user.id);
+      } else {
+        setIsLoading(false);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        fetchProfile(session.user.id);
+      } else {
+        setUser(null);
+        setIsLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   // Simulate offline status toggle for demo purposes
   React.useEffect(() => {
@@ -39,23 +77,23 @@ export default function App() {
     };
   }, []);
 
-  const handleLogin = (userData: any) => {
-    setUser(userData);
-    // Set default tab based on role
-    if (userData.role === 'reception') {
-      setActiveTab('admission');
-    } else {
-      setActiveTab('dashboard');
-    }
-  };
-
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
     setActiveTab('dashboard');
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center space-y-4">
+        <Loader2 className="w-12 h-12 text-navy animate-spin" />
+        <p className="text-slate-500 font-bold animate-pulse">SISA - Carregando Sistema...</p>
+      </div>
+    );
+  }
+
   if (!user) {
-    return <Login onLogin={handleLogin} />;
+    return <Login />;
   }
 
   const permissions: Record<string, string[]> = {

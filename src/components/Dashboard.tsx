@@ -10,7 +10,8 @@ import {
   BedDouble,
   Wallet,
   Calendar,
-  Package
+  Package,
+  Loader2
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -26,6 +27,8 @@ import {
 } from 'recharts';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
+import { supabase } from '../lib/supabase';
+import React from 'react';
 
 const waitTimeData = [
   { sector: 'Triagem', time: 15, capacity: 45 },
@@ -43,13 +46,29 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ user }: DashboardProps) {
+  const [patientCount, setPatientCount] = React.useState<number | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchStats = async () => {
+      const { count, error } = await supabase
+        .from('patients')
+        .select('*', { count: 'exact', head: true });
+      
+      if (!error) setPatientCount(count);
+      setIsLoading(false);
+    };
+
+    fetchStats();
+  }, []);
+
   const renderAdminDashboard = () => (
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
           { label: 'Receita Mensal', value: '12.4M Kz', icon: Wallet, trend: '+8%', color: 'text-emerald-600', bg: 'bg-emerald-50' },
           { label: 'Custo Operacional', value: '8.2M Kz', icon: TrendingUp, trend: '+2%', color: 'text-blue-600', bg: 'bg-blue-50' },
-          { label: 'Funcionários Ativos', value: '342', icon: Users, trend: 'Estável', color: 'text-amber-600', bg: 'bg-amber-50' },
+          { label: 'Pacientes Totais', value: isLoading ? '...' : patientCount?.toString() || '0', icon: Users, trend: 'Base de Dados', color: 'text-amber-600', bg: 'bg-amber-50' },
           { label: 'Ruptura de Stock', value: '05', icon: Package, trend: '-12%', color: 'text-red-600', bg: 'bg-red-50' },
         ].map((stat, i) => (
           <StatCard key={i} {...stat} delay={i * 0.1} />

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
+import { supabase } from '../lib/supabase';
 
 // Mock data for Angola's administrative structure
 const angolaData = {
@@ -62,11 +63,9 @@ export default function PatientAdmission() {
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [success, setSuccess] = React.useState(false);
+  const [submitError, setSubmitError] = React.useState<string | null>(null);
 
   const validateBI = (bi: string) => {
-    // Format: 13 digits and 1 letter (usually LA, BO, etc. but standard is 9 digits + 2 letters + 3 digits or similar)
-    // Actually, the user specified: 13 algarismos e 1 letra.
-    // Let's stick to the user's specific requirement: 13 digits + 1 letter.
     const regex = /^\d{13}[A-Z]$/;
     return regex.test(bi);
   };
@@ -75,7 +74,6 @@ export default function PatientAdmission() {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     
-    // Clear error when user types
     if (errors[name]) {
       setErrors(prev => {
         const newErrors = { ...prev };
@@ -85,8 +83,9 @@ export default function PatientAdmission() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError(null);
     const newErrors: Record<string, string> = {};
 
     if (!formData.fullName) newErrors.fullName = 'Nome completo é obrigatório';
@@ -102,12 +101,48 @@ export default function PatientAdmission() {
     }
 
     setIsSubmitting(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsSubmitting(false);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const { error } = await supabase
+        .from('patients')
+        .insert([{
+          full_name: formData.fullName,
+          bi_number: formData.docNumber,
+          birth_date: formData.birthDate || null,
+          gender: formData.gender,
+          process_number: formData.processNumber,
+          province: formData.province,
+          municipality: formData.municipality,
+          district: formData.district,
+          financing_type: formData.financing,
+          insurer: formData.insurer || null,
+          created_by: user?.id
+        }]);
+
+      if (error) throw error;
+
       setSuccess(true);
+      setFormData({
+        fullName: '',
+        docType: 'bi',
+        docNumber: '',
+        processNumber: 'HGL-' + Math.floor(100000 + Math.random() * 900000),
+        province: '',
+        municipality: '',
+        district: '',
+        financing: 'public',
+        insurer: '',
+        birthDate: '',
+        gender: 'M'
+      });
       setTimeout(() => setSuccess(false), 3000);
-    }, 1500);
+    } catch (err: any) {
+      setSubmitError(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const availableMunicipalities = formData.province ? Object.keys((angolaData as any)[formData.province].municipalities) : [];
@@ -127,6 +162,12 @@ export default function PatientAdmission() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
+        {submitError && (
+          <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 text-sm font-medium">
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            {submitError}
+          </div>
+        )}
         {/* Personal Info Section */}
         <section className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
           <div className="flex items-center gap-3 mb-2">
