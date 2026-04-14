@@ -11,7 +11,9 @@ import {
   FileText,
   Loader2,
   Plus,
-  Receipt
+  Receipt,
+  Printer,
+  CheckCircle2
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -24,6 +26,8 @@ export default function Finance() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [searchTerm, setSearchTerm] = React.useState('');
   const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [selectedRecord, setSelectedRecord] = React.useState<any>(null);
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = React.useState(false);
 
   const [formData, setFormData] = React.useState({
     type: 'income',
@@ -250,7 +254,7 @@ export default function Finance() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {filteredRecords.length > 0 ? filteredRecords.map((record) => (
-                      <tr key={record.id} className="hover:bg-slate-50 transition-colors">
+                      <tr key={record.id} className="hover:bg-slate-50 transition-colors group">
                         <td className="px-6 py-4 text-xs text-slate-400 font-medium">
                           {new Date(record.created_at).toLocaleDateString()}
                         </td>
@@ -258,12 +262,24 @@ export default function Finance() {
                         <td className="px-6 py-4 text-sm text-slate-500">{record.description}</td>
                         <td className="px-6 py-4 text-sm font-bold text-slate-900">{Number(record.amount).toLocaleString()} Kz</td>
                         <td className="px-6 py-4">
-                          <span className={cn(
-                            "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
-                            record.type === 'income' ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
-                          )}>
-                            {record.type === 'income' ? 'Entrada' : 'Saída'}
-                          </span>
+                          <div className="flex items-center justify-between">
+                            <span className={cn(
+                              "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                              record.type === 'income' ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
+                            )}>
+                              {record.type === 'income' ? 'Entrada' : 'Saída'}
+                            </span>
+                            <button 
+                              onClick={() => {
+                                setSelectedRecord(record);
+                                setIsInvoiceModalOpen(true);
+                              }}
+                              className="p-2 text-slate-400 hover:text-navy hover:bg-white rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                              title="Emitir Fatura"
+                            >
+                              <Printer className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )) : (
@@ -277,6 +293,72 @@ export default function Finance() {
                 </table>
               </div>
             </div>
+
+            <Modal
+              isOpen={isInvoiceModalOpen}
+              onClose={() => setIsInvoiceModalOpen(false)}
+              title="Fatura / Recibo Digital"
+            >
+              {selectedRecord && (
+                <div className="space-y-6">
+                  <div className="bg-white border-2 border-slate-100 p-8 rounded-3xl space-y-6 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-emerald/5 rounded-full -mr-16 -mt-16" />
+                    
+                    <div className="flex justify-between items-start relative">
+                      <div>
+                        <h4 className="text-2xl font-black italic tracking-tighter text-navy">SISA ERP</h4>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Recibo de Pagamento</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-bold text-slate-900">Nº FAT-{selectedRecord.id.slice(0, 8).toUpperCase()}</p>
+                        <p className="text-[10px] text-slate-400">{new Date(selectedRecord.created_at).toLocaleString()}</p>
+                      </div>
+                    </div>
+
+                    <div className="py-6 border-y border-slate-100 space-y-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-slate-500">Categoria</span>
+                        <span className="text-sm font-bold text-slate-900">{selectedRecord.category}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-slate-500">Descrição</span>
+                        <span className="text-sm font-medium text-slate-700">{selectedRecord.description || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-slate-500">Método</span>
+                        <span className="text-sm font-medium text-slate-700">Multicaixa / Cash</span>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center pt-4">
+                      <span className="text-lg font-bold text-slate-900">Total Pago</span>
+                      <span className="text-2xl font-black text-emerald">{Number(selectedRecord.amount).toLocaleString()} Kz</span>
+                    </div>
+
+                    <div className="pt-8 flex flex-col items-center justify-center gap-2">
+                      <div className="w-12 h-12 bg-emerald/10 rounded-full flex items-center justify-center">
+                        <CheckCircle2 className="w-6 h-6 text-emerald" />
+                      </div>
+                      <p className="text-[10px] font-bold text-emerald uppercase tracking-widest">Pagamento Confirmado</p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button 
+                      onClick={() => window.print()}
+                      className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-200 transition-all"
+                    >
+                      <Printer className="w-5 h-5" />
+                      Imprimir
+                    </button>
+                    <button className="flex-1 py-4 bg-navy text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-navy/90 transition-all">
+                      <Download className="w-5 h-5" />
+                      Baixar PDF
+                    </button>
+                  </div>
+                </div>
+              )}
+            </Modal>
 
             {/* Insurance Plans */}
             <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">

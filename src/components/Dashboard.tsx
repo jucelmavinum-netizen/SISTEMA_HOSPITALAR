@@ -40,8 +40,9 @@ const waitTimeData = [
 
 interface DashboardProps {
   user: {
+    id: string;
     role: string;
-    hospital: string;
+    hospital_name?: string;
   };
 }
 
@@ -52,7 +53,10 @@ export default function Dashboard({ user }: DashboardProps) {
     criticalStock: 0,
     triageStats: [] as any[],
     recentPatients: [] as any[],
-    monthlyRevenue: 0
+    monthlyRevenue: 0,
+    doctorAppointments: [] as any[],
+    pendingExams: 0,
+    inpatientCount: 0
   });
   const [isLoading, setIsLoading] = React.useState(true);
 
@@ -101,6 +105,33 @@ export default function Dashboard({ user }: DashboardProps) {
           .order('created_at', { ascending: false })
           .limit(5);
 
+        // 6. Doctor Specific Data
+        if (user.role === 'doctor') {
+          const { data: docApps } = await supabase
+            .from('appointments')
+            .select('*, patients(full_name)')
+            .eq('doctor_id', user.id)
+            .eq('status', 'scheduled')
+            .order('appointment_date');
+          
+          const { count: examsCount } = await supabase
+            .from('exams')
+            .select('*', { count: 'exact', head: true })
+            .eq('status', 'pending');
+
+          const { count: bedsCount } = await supabase
+            .from('beds')
+            .select('*', { count: 'exact', head: true })
+            .eq('status', 'occupied');
+
+          setStats(prev => ({
+            ...prev,
+            doctorAppointments: docApps || [],
+            pendingExams: examsCount || 0,
+            inpatientCount: bedsCount || 0
+          }));
+        }
+
         // Fetch Monthly Revenue
         const startOfMonth = new Date();
         startOfMonth.setDate(1);
@@ -114,14 +145,15 @@ export default function Dashboard({ user }: DashboardProps) {
 
         const monthlyRevenue = revenueData?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
 
-        setStats({
+        setStats(prev => ({
+          ...prev,
           patientCount: pCount || 0,
           staffCount: sCount || 0,
           criticalStock: cStock,
           triageStats: formattedTriage,
           recentPatients: recent || [],
           monthlyRevenue
-        });
+        }));
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
@@ -130,7 +162,7 @@ export default function Dashboard({ user }: DashboardProps) {
     };
 
     fetchDashboardData();
-  }, []);
+  }, [user.id, user.role]);
 
   const renderAdminDashboard = () => (
     <div className="space-y-8">
@@ -207,9 +239,9 @@ export default function Dashboard({ user }: DashboardProps) {
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { label: 'Consultas Hoje', value: '12', icon: Calendar, trend: '60% concluído', color: 'text-blue-600', bg: 'bg-blue-50' },
-          { label: 'Pacientes Internados', value: '08', icon: BedDouble, trend: '02 altas hoje', color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          { label: 'Exames Pendentes', value: '05', icon: FlaskConical, trend: '03 urgentes', color: 'text-amber-600', bg: 'bg-amber-50' },
+          { label: 'Consultas Hoje', value: stats.doctorAppointments.length.toString(), icon: Calendar, trend: 'Próximas', color: 'text-blue-600', bg: 'bg-blue-50' },
+          { label: 'Pacientes Internados', value: stats.inpatientCount.toString(), icon: BedDouble, trend: 'Ocupação', color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          { label: 'Exames Pendentes', value: stats.pendingExams.toString(), icon: FlaskConical, trend: 'Laboratório', color: 'text-amber-600', bg: 'bg-amber-50' },
           { label: 'Tempo Médio/Consulta', value: '22 min', icon: Clock, trend: '-2 min', color: 'text-purple-600', bg: 'bg-purple-50' },
         ].map((stat, i) => (
           <StatCard key={i} {...stat} delay={i * 0.1} />
@@ -219,25 +251,27 @@ export default function Dashboard({ user }: DashboardProps) {
         <div className="lg:col-span-2 bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
           <h3 className="text-xl font-bold text-slate-900 mb-6">Próximos Atendimentos</h3>
           <div className="space-y-4">
-            {[
-              { time: '10:30', patient: 'Maria Domingos', type: 'Retorno', priority: 'Normal' },
-              { time: '11:00', patient: 'João Afonso', type: 'Consulta', priority: 'Urgente' },
-              { time: '11:30', patient: 'Teresa Bento', type: 'Exame', priority: 'Normal' },
-            ].map((app, i) => (
+            {stats.doctorAppointments.length > 0 ? stats.doctorAppointments.map((app, i) => (
               <div key={i} className="flex items-center justify-between p-4 border border-slate-100 rounded-2xl hover:bg-slate-50 transition-all">
                 <div className="flex items-center gap-4">
-                  <span className="text-sm font-bold text-navy">{app.time}</span>
+                  <span className="text-sm font-bold text-navy">
+                    {new Date(app.appointment_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
                   <div>
-                    <p className="font-bold text-slate-900">{app.patient}</p>
+                    <p className="font-bold text-slate-900">{app.patients?.full_name}</p>
                     <p className="text-xs text-slate-500">{app.type}</p>
                   </div>
                 </div>
                 <span className={cn(
                   "px-3 py-1 rounded-full text-[10px] font-bold uppercase",
-                  app.priority === 'Urgente' ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-500"
-                )}>{app.priority}</span>
+                  app.type === 'Urgência' ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-500"
+                )}>{app.type === 'Urgência' ? 'Urgente' : 'Normal'}</span>
               </div>
-            ))}
+            )) : (
+              <div className="text-center py-12 text-slate-400 italic">
+                Nenhuma consulta agendada para hoje.
+              </div>
+            )}
           </div>
         </div>
         <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
@@ -245,11 +279,11 @@ export default function Dashboard({ user }: DashboardProps) {
           <div className="space-y-4">
             <div className="p-4 bg-red-50 border border-red-100 rounded-2xl">
               <p className="text-sm font-bold text-red-700">Resultado Crítico</p>
-              <p className="text-xs text-red-600 mt-1">Paciente Simão Pedro (Quarto 204) - Hemoglobina baixa.</p>
+              <p className="text-xs text-red-600 mt-1">Verifique os últimos exames laboratoriais pendentes.</p>
             </div>
             <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl">
               <p className="text-sm font-bold text-amber-700">Alta Pendente</p>
-              <p className="text-xs text-amber-600 mt-1">Aguardando assinatura para alta de Rosa Maria.</p>
+              <p className="text-xs text-amber-600 mt-1">Existem pacientes aguardando revisão para alta.</p>
             </div>
           </div>
         </div>

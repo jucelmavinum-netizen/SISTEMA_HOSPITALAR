@@ -237,7 +237,7 @@ export default function Login() {
                   }}
                   className="ml-2 text-emerald font-bold hover:underline"
                 >
-                  {isRegistering ? 'Fazer Login' : 'Solicitar Cadastro'}
+                  {isRegistering ? 'Fazer Login' : 'Criar Conta'}
                 </button>
               </p>
               <p className="text-xs text-slate-400">

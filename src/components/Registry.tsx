@@ -10,11 +10,14 @@ import {
   QrCode,
   Download,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Printer,
+  X
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
+import Modal from './ui/Modal';
 
 export default function Registry() {
   const [searchType, setSearchType] = React.useState<'bi' | 'card' | 'fingerprint'>('bi');
@@ -23,6 +26,7 @@ export default function Registry() {
   const [clinicalHistory, setClinicalHistory] = React.useState<any[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [isCardModalOpen, setIsCardModalOpen] = React.useState(false);
 
   const handleSearch = async () => {
     if (!searchTerm) return;
@@ -158,12 +162,87 @@ export default function Registry() {
                 </div>
               </div>
 
-              <button className="w-full mt-8 bg-emerald text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:shadow-lg hover:shadow-emerald/20 transition-all">
+              <button 
+                onClick={() => setIsCardModalOpen(true)}
+                className="w-full mt-8 bg-emerald text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:shadow-lg hover:shadow-emerald/20 transition-all"
+              >
                 <QrCode className="w-5 h-5" />
                 Gerar Cartão Digital
               </button>
             </div>
           </div>
+
+          <Modal
+            isOpen={isCardModalOpen}
+            onClose={() => setIsCardModalOpen(false)}
+            title="Cartão Digital do Paciente"
+          >
+            <div className="space-y-6">
+              <div className="relative bg-gradient-to-br from-navy to-slate-800 p-8 rounded-3xl text-white overflow-hidden shadow-2xl">
+                {/* Decorative Elements */}
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl" />
+                <div className="absolute bottom-0 left-0 w-24 h-24 bg-emerald/10 rounded-full -ml-12 -mb-12 blur-xl" />
+                
+                <div className="relative flex justify-between items-start mb-8">
+                  <div>
+                    <h4 className="text-xl font-black tracking-tighter italic">SISA ERP</h4>
+                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Sistema Integrado de Saúde</p>
+                  </div>
+                  <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center backdrop-blur-md">
+                    <QrCode className="w-6 h-6 text-emerald" />
+                  </div>
+                </div>
+
+                <div className="relative flex gap-6 items-center">
+                  <div className="w-24 h-24 rounded-2xl border-2 border-white/20 overflow-hidden bg-white/5">
+                    <img 
+                      src={`https://picsum.photos/seed/${patient.id}/200/200`} 
+                      alt="Patient" 
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-bold leading-tight">{patient.full_name}</h3>
+                    <p className="text-emerald font-mono text-sm mt-1">{patient.process_number}</p>
+                  </div>
+                </div>
+
+                <div className="relative mt-8 grid grid-cols-2 gap-6 pt-6 border-t border-white/10">
+                  <div>
+                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">B.I. / Documento</p>
+                    <p className="font-bold text-sm">{patient.bi_number}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Tipo de Sangue</p>
+                    <p className="font-bold text-sm">A+</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Província</p>
+                    <p className="font-bold text-sm">{patient.province}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Validade</p>
+                    <p className="font-bold text-sm">Indeterminada</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => window.print()}
+                  className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-200 transition-all"
+                >
+                  <Printer className="w-5 h-5" />
+                  Imprimir Cartão
+                </button>
+                <button className="flex-1 py-4 bg-navy text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-navy/90 transition-all">
+                  <Download className="w-5 h-5" />
+                  Baixar PDF
+                </button>
+              </div>
+            </div>
+          </Modal>
 
           {/* Clinical History */}
           <div className="lg:col-span-2 space-y-6">

@@ -33,6 +33,12 @@ export default function Laboratory() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [searchTerm, setSearchTerm] = React.useState('');
   const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [isResultModalOpen, setIsResultModalOpen] = React.useState(false);
+  const [selectedExam, setSelectedExam] = React.useState<any>(null);
+  const [resultData, setResultData] = React.useState({
+    result: '',
+    technician_notes: ''
+  });
 
   const [formData, setFormData] = React.useState({
     patient_id: '',
@@ -106,6 +112,49 @@ export default function Laboratory() {
     } catch (error) {
       console.error('Error creating exam:', error);
       alert('Erro ao solicitar exame. Por favor, tente novamente.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdateExamStatus = async (examId: string, status: string) => {
+    try {
+      const { error } = await supabase
+        .from('exams')
+        .update({ status })
+        .eq('id', examId);
+      
+      if (error) throw error;
+      fetchExams();
+    } catch (error) {
+      console.error('Error updating exam status:', error);
+      alert('Erro ao atualizar status do exame.');
+    }
+  };
+
+  const handleFinishExam = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedExam) return;
+    setIsSubmitting(true);
+
+    try {
+      const { error } = await supabase
+        .from('exams')
+        .update({
+          status: 'ready',
+          result: resultData.result,
+          notes: selectedExam.notes + '\n\nNotas do Técnico: ' + resultData.technician_notes
+        })
+        .eq('id', selectedExam.id);
+
+      if (error) throw error;
+
+      setIsResultModalOpen(false);
+      setResultData({ result: '', technician_notes: '' });
+      fetchExams();
+    } catch (error) {
+      console.error('Error finishing exam:', error);
+      alert('Erro ao finalizar exame.');
     } finally {
       setIsSubmitting(false);
     }
@@ -201,6 +250,54 @@ export default function Laboratory() {
         </form>
       </Modal>
 
+      <Modal
+        isOpen={isResultModalOpen}
+        onClose={() => setIsResultModalOpen(false)}
+        title="Lançar Resultado de Exame"
+      >
+        <form onSubmit={handleFinishExam} className="space-y-4">
+          {selectedExam && (
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 mb-4">
+              <p className="text-xs font-bold text-slate-400 uppercase">Paciente</p>
+              <p className="font-bold text-slate-900">{selectedExam.patients?.full_name}</p>
+              <p className="text-xs text-slate-500 mt-1">{selectedExam.exam_type}</p>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase">Resultado / Conclusão</label>
+            <input
+              required
+              type="text"
+              placeholder="Ex: Reagente, Não Reagente, Normal, Alterado..."
+              value={resultData.result}
+              onChange={(e) => setResultData({ ...resultData, result: e.target.value })}
+              className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase">Notas Técnicas / Laudo</label>
+            <textarea
+              required
+              value={resultData.technician_notes}
+              onChange={(e) => setResultData({ ...resultData, technician_notes: e.target.value })}
+              className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all h-32 resize-none"
+              placeholder="Descreva detalhadamente os achados do exame..."
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full py-4 bg-emerald text-white rounded-2xl font-bold hover:bg-emerald/90 transition-all shadow-lg shadow-emerald/20 disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
+            Finalizar e Liberar Resultado
+          </button>
+        </form>
+      </Modal>
+
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-12 h-12 text-emerald animate-spin" />
@@ -283,6 +380,25 @@ export default function Laboratory() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          {exam.status === 'pending' && (
+                            <button 
+                              onClick={() => handleUpdateExamStatus(exam.id, 'processing')}
+                              className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-bold uppercase hover:bg-blue-100 transition-all"
+                            >
+                              Analisar
+                            </button>
+                          )}
+                          {exam.status === 'processing' && (
+                            <button 
+                              onClick={() => {
+                                setSelectedExam(exam);
+                                setIsResultModalOpen(true);
+                              }}
+                              className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-bold uppercase hover:bg-emerald-100 transition-all"
+                            >
+                              Finalizar
+                            </button>
+                          )}
                           {exam.status === 'ready' ? (
                             <>
                               <button className="p-2 hover:bg-white rounded-lg text-emerald hover:shadow-sm transition-all" title="Ver Resultado">
@@ -292,7 +408,7 @@ export default function Laboratory() {
                                 <Download className="w-4 h-4" />
                               </button>
                             </>
-                          ) : (
+                          ) : exam.status !== 'pending' && exam.status !== 'processing' && (
                             <button className="p-2 hover:bg-white rounded-lg text-slate-300 cursor-not-allowed">
                               <AlertCircle className="w-4 h-4" />
                             </button>

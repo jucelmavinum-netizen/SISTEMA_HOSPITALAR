@@ -196,10 +196,19 @@ export default function BedsManagement() {
               className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all"
             >
               <option value="">Selecionar Leito</option>
-              {beds.filter(b => b.status === 'available').map(b => (
-                <option key={b.id} value={b.id}>{b.id} - {b.ward}</option>
-              ))}
+              {beds.filter(b => b.status === 'available').length > 0 ? (
+                beds.filter(b => b.status === 'available').map(b => (
+                  <option key={b.id} value={b.id}>{b.id} - {b.ward}</option>
+                ))
+              ) : (
+                <option disabled value="">Nenhum leito disponível no momento</option>
+              )}
             </select>
+            {beds.filter(b => b.status === 'available').length === 0 && (
+              <p className="text-[10px] text-amber-600 font-bold flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" /> Todos os leitos estão ocupados ou em limpeza.
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">

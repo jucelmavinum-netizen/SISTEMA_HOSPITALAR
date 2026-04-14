@@ -9,7 +9,10 @@ import {
   MoreVertical,
   User,
   Loader2,
-  CalendarDays
+  CalendarDays,
+  Stethoscope,
+  ClipboardList,
+  CheckCircle2
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -32,6 +35,8 @@ export default function Scheduling() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [searchTerm, setSearchTerm] = React.useState('');
   const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [isConsultationModalOpen, setIsConsultationModalOpen] = React.useState(false);
+  const [selectedAppointment, setSelectedAppointment] = React.useState<any>(null);
 
   const [formData, setFormData] = React.useState({
     patient_id: '',
@@ -41,6 +46,15 @@ export default function Scheduling() {
     type: 'Consulta',
     notes: ''
   });
+
+  const [consultationData, setConsultationData] = React.useState({
+    symptoms: '',
+    diagnosis: '',
+    prescription: '',
+    notes: ''
+  });
+
+  const [triageData, setTriageData] = React.useState<any>(null);
 
   React.useEffect(() => {
     fetchData();
@@ -111,6 +125,51 @@ export default function Scheduling() {
     }
   };
 
+  const handleCompleteConsultation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAppointment) return;
+    setIsSubmitting(true);
+
+    try {
+      // 1. Create Consultation Record
+      const { error: consError } = await supabase
+        .from('consultations')
+        .insert([{
+          patient_id: selectedAppointment.patient_id,
+          doctor_id: selectedAppointment.doctor_id,
+          symptoms: consultationData.symptoms,
+          diagnosis: consultationData.diagnosis,
+          prescription: consultationData.prescription,
+          notes: consultationData.notes
+        }]);
+
+      if (consError) throw consError;
+
+      // 2. Update Appointment Status
+      const { error: appError } = await supabase
+        .from('appointments')
+        .update({ status: 'completed' })
+        .eq('id', selectedAppointment.id);
+
+      if (appError) throw appError;
+
+      setIsConsultationModalOpen(false);
+      setSelectedAppointment(null);
+      setConsultationData({
+        symptoms: '',
+        diagnosis: '',
+        prescription: '',
+        notes: ''
+      });
+      fetchData();
+    } catch (error) {
+      console.error('Error completing consultation:', error);
+      alert('Erro ao finalizar consulta.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const filteredAppointments = appointments.filter(app => 
     app.patients?.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     app.profiles?.full_name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -131,6 +190,119 @@ export default function Scheduling() {
           Marcar Consulta
         </button>
       </div>
+
+      <Modal
+        isOpen={isConsultationModalOpen}
+        onClose={() => setIsConsultationModalOpen(false)}
+        title="Realizar Consulta Médica"
+      >
+        {selectedAppointment && (
+          <form onSubmit={handleCompleteConsultation} className="space-y-6">
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4">
+              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center border border-slate-200">
+                <User className="w-6 h-6 text-slate-400" />
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-900">{selectedAppointment.patients?.full_name}</h4>
+                <p className="text-xs text-slate-500">Consulta de {selectedAppointment.type}</p>
+              </div>
+            </div>
+
+            {triageData && (
+              <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <h5 className="text-xs font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-2">
+                    <ClipboardList className="w-4 h-4" />
+                    Dados da Triagem
+                  </h5>
+                  <span className={cn(
+                    "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase",
+                    triageData.classification === 'red' ? "bg-red-500 text-white" :
+                    triageData.classification === 'orange' ? "bg-orange-500 text-white" :
+                    triageData.classification === 'yellow' ? "bg-yellow-500 text-white" :
+                    triageData.classification === 'green' ? "bg-green-500 text-white" :
+                    "bg-blue-500 text-white"
+                  )}>
+                    {triageData.classification}
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="text-center">
+                    <p className="text-[10px] text-slate-500 font-bold uppercase">PA</p>
+                    <p className="text-sm font-bold text-slate-900">{triageData.blood_pressure}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] text-slate-500 font-bold uppercase">Temp</p>
+                    <p className="text-sm font-bold text-slate-900">{triageData.temperature}°C</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] text-slate-500 font-bold uppercase">Peso</p>
+                    <p className="text-sm font-bold text-slate-900">{triageData.weight}kg</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] text-slate-500 font-bold uppercase">FC</p>
+                    <p className="text-sm font-bold text-slate-900">{triageData.heart_rate} bpm</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase">Sintomas / Queixas</label>
+                <textarea
+                  required
+                  value={consultationData.symptoms}
+                  onChange={(e) => setConsultationData({ ...consultationData, symptoms: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all h-20 resize-none"
+                  placeholder="Descreva os sintomas relatados..."
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase">Diagnóstico Clínico</label>
+                <textarea
+                  required
+                  value={consultationData.diagnosis}
+                  onChange={(e) => setConsultationData({ ...consultationData, diagnosis: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all h-20 resize-none"
+                  placeholder="Diagnóstico final ou hipótese..."
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase">Prescrição Médica</label>
+                <textarea
+                  required
+                  value={consultationData.prescription}
+                  onChange={(e) => setConsultationData({ ...consultationData, prescription: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all h-24 resize-none"
+                  placeholder="Medicamentos, dosagem e duração..."
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase">Notas Adicionais</label>
+                <textarea
+                  value={consultationData.notes}
+                  onChange={(e) => setConsultationData({ ...consultationData, notes: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all h-20 resize-none"
+                  placeholder="Observações internas..."
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full py-4 bg-navy text-white rounded-2xl font-bold hover:bg-navy/90 transition-all shadow-lg shadow-navy/20 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
+              Finalizar Atendimento e Salvar
+            </button>
+          </form>
+        )}
+      </Modal>
 
       <Modal
         isOpen={isModalOpen}
@@ -341,9 +513,41 @@ export default function Scheduling() {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <button className="p-2 hover:bg-white rounded-lg text-slate-400">
-                            <MoreVertical className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            {app.status === 'scheduled' && (
+                              <button 
+                                onClick={async () => {
+                                  setSelectedAppointment(app);
+                                  // Fetch triage data for this patient
+                                  const { data: triage } = await supabase
+                                    .from('triage_records')
+                                    .select('*')
+                                    .eq('patient_id', app.patient_id)
+                                    .order('created_at', { ascending: false })
+                                    .limit(1)
+                                    .single();
+                                  
+                                  if (triage) {
+                                    setTriageData(triage);
+                                    setConsultationData(prev => ({
+                                      ...prev,
+                                      symptoms: triage.symptoms || ''
+                                    }));
+                                  } else {
+                                    setTriageData(null);
+                                  }
+                                  setIsConsultationModalOpen(true);
+                                }}
+                                className="px-3 py-1.5 bg-emerald text-white rounded-lg text-xs font-bold hover:bg-emerald/90 transition-all flex items-center gap-1"
+                              >
+                                <Stethoscope className="w-3 h-3" />
+                                Atender
+                              </button>
+                            )}
+                            <button className="p-2 hover:bg-white rounded-lg text-slate-400">
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )) : (

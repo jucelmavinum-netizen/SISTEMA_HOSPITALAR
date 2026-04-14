@@ -57,15 +57,14 @@ export default function HumanResources() {
     setIsSubmitting(true);
 
     try {
-      // Note: This only adds to profiles, doesn't create a Supabase Auth user.
-      // In a real app, this would be handled by an admin invite or similar.
       const { error } = await supabase
         .from('profiles')
         .insert([{
-          id: crypto.randomUUID(), // Temporary ID since we aren't creating an auth user here
+          id: crypto.randomUUID(),
           full_name: formData.full_name,
           role: formData.role,
-          hospital_name: formData.hospital_name
+          hospital_name: formData.hospital_name,
+          created_at: new Date().toISOString()
         }]);
 
       if (error) throw error;
@@ -79,7 +78,7 @@ export default function HumanResources() {
       fetchStaff();
     } catch (error) {
       console.error('Error adding staff:', error);
-      alert('Erro ao adicionar funcionário.');
+      alert('Erro ao adicionar funcionário. Verifique se o banco de dados está configurado corretamente.');
     } finally {
       setIsSubmitting(false);
     }
