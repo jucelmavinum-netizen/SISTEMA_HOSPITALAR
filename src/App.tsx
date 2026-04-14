@@ -4,12 +4,14 @@
  */
 
 import React from 'react';
+import { Lock } from 'lucide-react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import Registry from './components/Registry';
 import Triage from './components/Triage';
 import Tracking from './components/Tracking';
 import Login from './components/Login';
+import PatientAdmission from './components/PatientAdmission';
 import BedsManagement from './components/BedsManagement';
 import PharmacyStock from './components/PharmacyStock';
 import HumanResources from './components/HumanResources';
@@ -39,6 +41,12 @@ export default function App() {
 
   const handleLogin = (userData: any) => {
     setUser(userData);
+    // Set default tab based on role
+    if (userData.role === 'reception') {
+      setActiveTab('admission');
+    } else {
+      setActiveTab('dashboard');
+    }
   };
 
   const handleLogout = () => {
@@ -50,10 +58,41 @@ export default function App() {
     return <Login onLogin={handleLogin} />;
   }
 
+  const permissions: Record<string, string[]> = {
+    admin: ['dashboard', 'admission', 'registry', 'scheduling', 'triage', 'laboratory', 'beds', 'pharmacy', 'hr', 'tracking', 'stats', 'finance'],
+    doctor: ['dashboard', 'registry', 'scheduling', 'triage', 'laboratory', 'beds'],
+    nurse: ['dashboard', 'admission', 'registry', 'triage', 'beds', 'pharmacy', 'tracking'],
+    reception: ['admission', 'registry', 'scheduling', 'finance']
+  };
+
+  const hasPermission = (tab: string) => {
+    return permissions[user.role]?.includes(tab);
+  };
+
   const renderContent = () => {
+    if (!hasPermission(activeTab)) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-4">
+          <div className="p-4 bg-slate-100 rounded-full">
+            <Lock className="w-12 h-12" />
+          </div>
+          <h2 className="text-xl font-bold">Acesso Restrito</h2>
+          <p>Você não tem permissão para acessar este módulo.</p>
+          <button 
+            onClick={() => setActiveTab(permissions[user.role][0])}
+            className="px-6 py-2 bg-navy text-white rounded-xl font-bold"
+          >
+            Voltar para Início
+          </button>
+        </div>
+      );
+    }
+
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard />;
+        return <Dashboard user={user} />;
+      case 'admission':
+        return <PatientAdmission />;
       case 'registry':
         return <Registry />;
       case 'scheduling':
@@ -75,7 +114,7 @@ export default function App() {
       case 'finance':
         return <Finance />;
       default:
-        return <Dashboard />;
+        return <Dashboard user={user} />;
     }
   };
 

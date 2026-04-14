@@ -2,6 +2,7 @@ import React from 'react';
 import { 
   LayoutDashboard, 
   UserPlus, 
+  Fingerprint,
   Stethoscope, 
   Activity, 
   Wifi, 
@@ -47,18 +48,21 @@ export default function Layout({ children, activeTab, setActiveTab, isOffline, u
   };
 
   const menuItems = [
-    { id: 'dashboard', label: 'Gestão de Enchentes', icon: LayoutDashboard },
-    { id: 'registry', label: 'Registro e Biometria', icon: UserPlus },
-    { id: 'scheduling', label: 'Agendamento', icon: CalendarIcon },
-    { id: 'triage', label: 'Triagem Dinâmica', icon: Stethoscope },
-    { id: 'laboratory', label: 'Laboratório', icon: FlaskConical },
-    { id: 'beds', label: 'Censo e Leitos', icon: BedDouble },
-    { id: 'pharmacy', label: 'Farmácia e Stock', icon: Pill },
-    { id: 'hr', label: 'Recursos Humanos', icon: Users },
-    { id: 'tracking', label: 'Rastreio de Recursos', icon: PackageSearch },
-    { id: 'stats', label: 'Estatísticas e Relatórios', icon: BarChart3 },
-    { id: 'finance', label: 'Gestão Financeira', icon: Wallet },
+    { id: 'dashboard', label: 'Gestão de Enchentes', icon: LayoutDashboard, roles: ['admin', 'doctor', 'nurse'] },
+    { id: 'admission', label: 'Admissão de Pacientes', icon: UserPlus, roles: ['admin', 'nurse', 'reception'] },
+    { id: 'registry', label: 'Registro e Biometria', icon: Fingerprint, roles: ['admin', 'doctor', 'nurse', 'reception'] },
+    { id: 'scheduling', label: 'Agendamento', icon: CalendarIcon, roles: ['admin', 'doctor', 'reception'] },
+    { id: 'triage', label: 'Triagem Dinâmica', icon: Stethoscope, roles: ['admin', 'doctor', 'nurse'] },
+    { id: 'laboratory', label: 'Laboratório', icon: FlaskConical, roles: ['admin', 'doctor'] },
+    { id: 'beds', label: 'Censo e Leitos', icon: BedDouble, roles: ['admin', 'doctor', 'nurse'] },
+    { id: 'pharmacy', label: 'Farmácia e Stock', icon: Pill, roles: ['admin', 'nurse'] },
+    { id: 'hr', label: 'Recursos Humanos', icon: Users, roles: ['admin'] },
+    { id: 'tracking', label: 'Rastreio de Recursos', icon: PackageSearch, roles: ['admin', 'nurse'] },
+    { id: 'stats', label: 'Estatísticas e Relatórios', icon: BarChart3, roles: ['admin'] },
+    { id: 'finance', label: 'Gestão Financeira', icon: Wallet, roles: ['admin', 'reception'] },
   ];
+
+  const filteredMenuItems = menuItems.filter(item => item.roles.includes(user.role));
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
@@ -78,8 +82,8 @@ export default function Layout({ children, activeTab, setActiveTab, isOffline, u
           )}
         </div>
 
-        <nav className="flex-1 py-6 px-3 space-y-2">
-          {menuItems.map((item) => (
+        <nav className="flex-1 py-6 px-3 space-y-2 overflow-y-auto custom-scrollbar">
+          {filteredMenuItems.map((item) => (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
