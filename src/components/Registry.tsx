@@ -8,14 +8,58 @@ import {
   FileText,
   ExternalLink,
   QrCode,
-  Download
+  Download,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
+import { supabase } from '../lib/supabase';
 
 export default function Registry() {
   const [searchType, setSearchType] = React.useState<'bi' | 'card' | 'fingerprint'>('bi');
-  const [showHistory, setShowHistory] = React.useState(false);
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [patient, setPatient] = React.useState<any>(null);
+  const [clinicalHistory, setClinicalHistory] = React.useState<any[]>([]);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const handleSearch = async () => {
+    if (!searchTerm) return;
+    setIsLoading(true);
+    setError(null);
+    setPatient(null);
+
+    try {
+      const { data, error } = await supabase
+        .from('patients')
+        .select('*')
+        .eq('bi_number', searchTerm)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          setError('Paciente não encontrado com este B.I.');
+        } else {
+          throw error;
+        }
+      } else {
+        setPatient(data);
+        // Fetch triage history as clinical history
+        const { data: history, error: historyError } = await supabase
+          .from('triage_records')
+          .select('*')
+          .eq('patient_id', data.id)
+          .order('created_at', { ascending: false });
+        
+        if (!historyError) setClinicalHistory(history || []);
+      }
+    } catch (err: any) {
+      setError('Erro ao buscar paciente: ' + err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
@@ -51,20 +95,31 @@ export default function Registry() {
         <div className="relative max-w-2xl mx-auto">
           <input 
             type="text" 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             placeholder={searchType === 'bi' ? "Digite o número do BI (ex: 001234567LA041)" : "Aguardando leitura..."}
             className="w-full pl-6 pr-32 py-5 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald transition-all text-xl font-medium"
           />
           <button 
-            onClick={() => setShowHistory(true)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 bg-navy text-white px-6 py-3 rounded-xl font-bold hover:bg-navy/90 transition-all flex items-center gap-2"
+            onClick={handleSearch}
+            disabled={isLoading}
+            className="absolute right-3 top-1/2 -translate-y-1/2 bg-navy text-white px-6 py-3 rounded-xl font-bold hover:bg-navy/90 transition-all flex items-center gap-2 disabled:opacity-70"
           >
-            <Search className="w-5 h-5" />
+            {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
             Buscar
           </button>
         </div>
+
+        {error && (
+          <div className="max-w-2xl mx-auto p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 text-sm font-medium">
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            {error}
+          </div>
+        )}
       </div>
 
-      {showHistory ? (
+      {patient ? (
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -75,31 +130,31 @@ export default function Registry() {
             <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm text-center">
               <div className="w-32 h-32 bg-slate-100 rounded-full mx-auto mb-4 flex items-center justify-center overflow-hidden border-4 border-emerald/20">
                 <img 
-                  src="https://picsum.photos/seed/patient1/200/200" 
+                  src={`https://picsum.photos/seed/${patient.id}/200/200`} 
                   alt="Avatar" 
                   className="w-full h-full object-cover"
                   referrerPolicy="no-referrer"
                 />
               </div>
-              <h2 className="text-xl font-bold text-slate-900">António João Manuel</h2>
-              <p className="text-sm text-slate-500">BI: 005432189LA045</p>
+              <h2 className="text-xl font-bold text-slate-900">{patient.full_name}</h2>
+              <p className="text-sm text-slate-500">BI: {patient.bi_number}</p>
               
               <div className="mt-6 pt-6 border-t border-slate-100 grid grid-cols-2 gap-4 text-left">
                 <div>
-                  <p className="text-[10px] uppercase font-bold text-slate-400">Idade</p>
-                  <p className="font-bold text-slate-700">34 anos</p>
-                </div>
-                <div>
                   <p className="text-[10px] uppercase font-bold text-slate-400">Gênero</p>
-                  <p className="font-bold text-slate-700">Masculino</p>
+                  <p className="font-bold text-slate-700">{patient.gender === 'M' ? 'Masculino' : 'Feminino'}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase font-bold text-slate-400">Tipo Sanguíneo</p>
-                  <p className="font-bold text-red-600">O+</p>
+                  <p className="text-[10px] uppercase font-bold text-slate-400">Província</p>
+                  <p className="font-bold text-slate-700">{patient.province}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase font-bold text-slate-400">Alergias</p>
-                  <p className="font-bold text-amber-600">Penicilina</p>
+                  <p className="text-[10px] uppercase font-bold text-slate-400">Financiamento</p>
+                  <p className="font-bold text-emerald capitalize">{patient.financing_type}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-slate-400">Nº Processo</p>
+                  <p className="font-bold text-navy">{patient.process_number}</p>
                 </div>
               </div>
 
@@ -124,30 +179,39 @@ export default function Registry() {
               </div>
 
               <div className="space-y-4">
-                {[
-                  { date: '12 Mar 2024', hospital: 'Hospital Geral de Luanda', reason: 'Malária Grave', type: 'Internamento' },
-                  { date: '05 Jan 2024', hospital: 'Centro de Saúde da Samba', reason: 'Consulta de Rotina', type: 'Ambulatório' },
-                  { date: '20 Nov 2023', hospital: 'Hospital Josina Machel', reason: 'Fratura de Membro', type: 'Cirurgia' },
-                ].map((item, i) => (
+                {clinicalHistory.length > 0 ? clinicalHistory.map((item, i) => (
                   <div key={i} className="flex items-start gap-4 p-4 rounded-2xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100 group">
                     <div className="p-3 bg-white border border-slate-200 rounded-xl group-hover:border-emerald/30 transition-colors">
                       <FileText className="w-5 h-5 text-slate-400 group-hover:text-emerald transition-colors" />
                     </div>
                     <div className="flex-1">
                       <div className="flex justify-between">
-                        <h4 className="font-bold text-slate-900">{item.reason}</h4>
-                        <span className="text-xs font-medium text-slate-400">{item.date}</span>
+                        <h4 className="font-bold text-slate-900">Triagem: {item.classification.toUpperCase()}</h4>
+                        <span className="text-xs font-medium text-slate-400">{new Date(item.created_at).toLocaleDateString()}</span>
                       </div>
-                      <p className="text-sm text-slate-500">{item.hospital}</p>
+                      <p className="text-sm text-slate-500 line-clamp-2">{item.notes}</p>
                       <div className="mt-2 flex items-center gap-3">
-                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 bg-slate-100 rounded text-slate-500">{item.type}</span>
+                        <span className={cn(
+                          "text-[10px] font-bold uppercase px-2 py-0.5 rounded text-white",
+                          item.classification === 'red' ? 'bg-red-500' : 
+                          item.classification === 'orange' ? 'bg-orange-500' :
+                          item.classification === 'yellow' ? 'bg-yellow-500' :
+                          item.classification === 'green' ? 'bg-green-500' : 'bg-blue-500'
+                        )}>
+                          {item.classification}
+                        </span>
                         <button className="text-xs font-bold text-emerald flex items-center gap-1 hover:underline">
                           Ver detalhes <ExternalLink className="w-3 h-3" />
                         </button>
                       </div>
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="text-center py-12 text-slate-400">
+                    <History className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                    <p>Nenhum histórico clínico encontrado para este paciente.</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

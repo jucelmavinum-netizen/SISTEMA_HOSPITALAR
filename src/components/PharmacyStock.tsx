@@ -7,7 +7,10 @@ import {
   ShoppingCart,
   Search,
   Plus,
-  ArrowDown
+  ArrowDown,
+  Loader2,
+  PackagePlus,
+  ClipboardList
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -21,24 +24,137 @@ import {
 } from 'recharts';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
-
-const stockData = [
-  { name: 'Artesunato', stock: 450, min: 1000, status: 'critical' },
-  { name: 'Paracetamol', stock: 2500, min: 2000, status: 'normal' },
-  { name: 'Amoxicilina', stock: 120, min: 500, status: 'critical' },
-  { name: 'Luvas Látex', stock: 8000, min: 5000, status: 'normal' },
-  { name: 'Seringas 5ml', stock: 300, min: 1500, status: 'critical' },
-];
-
-const expiryData = [
-  { month: 'Abr', count: 12 },
-  { month: 'Mai', count: 45 },
-  { month: 'Jun', count: 28 },
-  { month: 'Jul', count: 110 },
-  { month: 'Ago', count: 65 },
-];
+import { supabase } from '../lib/supabase';
+import Modal from './ui/Modal';
 
 export default function PharmacyStock() {
+  const [inventory, setInventory] = React.useState<any[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [isStockModalOpen, setIsStockModalOpen] = React.useState(false);
+  const [isRequestModalOpen, setIsRequestModalOpen] = React.useState(false);
+
+  const [stockFormData, setStockFormData] = React.useState({
+    item_name: '',
+    category: 'Medicamentos',
+    quantity: 0,
+    min_stock: 10,
+    expiry_date: ''
+  });
+
+  const [requestFormData, setRequestFormData] = React.useState({
+    item_id: '',
+    quantity: 0,
+    requester: ''
+  });
+
+  React.useEffect(() => {
+    fetchInventory();
+  }, []);
+
+  const fetchInventory = async () => {
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from('inventory')
+      .select('*')
+      .order('item_name');
+    
+    if (!error) setInventory(data || []);
+    setIsLoading(false);
+  };
+
+  const handleStockEntry = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      // Check if item already exists
+      const existingItem = inventory.find(i => i.item_name.toLowerCase() === stockFormData.item_name.toLowerCase());
+
+      if (existingItem) {
+        const { error } = await supabase
+          .from('inventory')
+          .update({
+            quantity: existingItem.quantity + Number(stockFormData.quantity),
+            expiry_date: stockFormData.expiry_date || existingItem.expiry_date
+          })
+          .eq('id', existingItem.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('inventory')
+          .insert([stockFormData]);
+        if (error) throw error;
+      }
+
+      setIsStockModalOpen(false);
+      setStockFormData({
+        item_name: '',
+        category: 'Medicamentos',
+        quantity: 0,
+        min_stock: 10,
+        expiry_date: ''
+      });
+      fetchInventory();
+    } catch (error) {
+      console.error('Error adding stock:', error);
+      alert('Erro ao processar entrada de stock.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRequisition = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      const item = inventory.find(i => i.id === requestFormData.item_id);
+      if (!item || item.quantity < requestFormData.quantity) {
+        throw new Error('Stock insuficiente');
+      }
+
+      const { error } = await supabase
+        .from('inventory')
+        .update({
+          quantity: item.quantity - Number(requestFormData.quantity)
+        })
+        .eq('id', item.id);
+
+      if (error) throw error;
+
+      setIsRequestModalOpen(false);
+      setRequestFormData({
+        item_id: '',
+        quantity: 0,
+        requester: ''
+      });
+      fetchInventory();
+    } catch (error: any) {
+      console.error('Error processing requisition:', error);
+      alert(error.message || 'Erro ao processar requisição.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const filteredInventory = inventory.filter(item => 
+    item.item_name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const criticalItems = inventory.filter(item => item.quantity <= item.min_stock);
+
+  // Mock expiry data for the chart as we don't have many real items yet, 
+  // but we can derive it if expiry_date exists
+  const expiryData = [
+    { month: 'Abr', count: 12 },
+    { month: 'Mai', count: 45 },
+    { month: 'Jun', count: 28 },
+    { month: 'Jul', count: 110 },
+    { month: 'Ago', count: 65 },
+  ];
+
   return (
     <div className="space-y-8">
       <div className="flex items-end justify-between">
@@ -47,130 +163,301 @@ export default function PharmacyStock() {
           <p className="text-slate-500 mt-1">Controle de medicamentos, consumíveis e validade.</p>
         </div>
         <div className="flex gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all">
+          <button 
+            onClick={() => setIsRequestModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all"
+          >
             <ShoppingCart className="w-4 h-4" />
             Requisição Digital
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-navy text-white rounded-xl text-sm font-bold hover:bg-navy/90 transition-all">
+          <button 
+            onClick={() => setIsStockModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-navy text-white rounded-xl text-sm font-bold hover:bg-navy/90 transition-all"
+          >
             <Plus className="w-4 h-4" />
             Entrada de Stock
           </button>
         </div>
       </div>
 
-      {/* Critical Alerts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <AlertTriangle className="w-6 h-6 text-red-500" />
-              Ruptura de Stock (Crítico)
-            </h3>
-            <button className="text-sm font-bold text-emerald hover:underline">Ver todos</button>
+      <Modal
+        isOpen={isStockModalOpen}
+        onClose={() => setIsStockModalOpen(false)}
+        title="Entrada de Stock"
+      >
+        <form onSubmit={handleStockEntry} className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase">Nome do Item</label>
+            <input
+              required
+              type="text"
+              value={stockFormData.item_name}
+              onChange={(e) => setStockFormData({ ...stockFormData, item_name: e.target.value })}
+              className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all"
+              placeholder="Ex: Paracetamol 500mg"
+            />
           </div>
-          
-          <div className="space-y-4">
-            {stockData.filter(i => i.status === 'critical').map((item, i) => (
-              <div key={i} className="flex items-center justify-between p-4 bg-red-50/50 rounded-2xl border border-red-100">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-white rounded-xl shadow-sm">
-                    <Pill className="w-5 h-5 text-red-500" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-slate-900">{item.name}</h4>
-                    <p className="text-xs text-slate-500">Stock atual: <span className="text-red-600 font-bold">{item.stock} un</span> / Mínimo: {item.min} un</p>
-                  </div>
-                </div>
-                <button className="px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition-all">
-                  Pedir Agora
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
 
-        <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
-          <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
-            <Calendar className="w-6 h-6 text-amber-500" />
-            Vencimento Próximo
-          </h3>
-          <div className="h-[200px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={expiryData}>
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
-                <Tooltip />
-                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                  {expiryData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.count > 50 ? '#ef4444' : '#f59e0b'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase">Categoria</label>
+              <select
+                value={stockFormData.category}
+                onChange={(e) => setStockFormData({ ...stockFormData, category: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all"
+              >
+                <option value="Medicamentos">Medicamentos</option>
+                <option value="Consumíveis">Consumíveis</option>
+                <option value="Equipamentos">Equipamentos</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase">Quantidade</label>
+              <input
+                required
+                type="number"
+                min="1"
+                value={stockFormData.quantity}
+                onChange={(e) => setStockFormData({ ...stockFormData, quantity: Number(e.target.value) })}
+                className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all"
+              />
+            </div>
           </div>
-          <p className="text-xs text-slate-400 mt-4 text-center">Medicamentos a vencer nos próximos 5 meses.</p>
-        </div>
-      </div>
 
-      {/* Inventory Table */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-          <div className="relative max-w-xs w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input type="text" placeholder="Pesquisar no inventário..." className="w-full pl-10 pr-4 py-2 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all" />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase">Stock Mínimo</label>
+              <input
+                required
+                type="number"
+                min="1"
+                value={stockFormData.min_stock}
+                onChange={(e) => setStockFormData({ ...stockFormData, min_stock: Number(e.target.value) })}
+                className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase">Validade</label>
+              <input
+                type="date"
+                value={stockFormData.expiry_date}
+                onChange={(e) => setStockFormData({ ...stockFormData, expiry_date: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all"
+              />
+            </div>
           </div>
-          <div className="flex gap-4">
-            <select className="bg-slate-50 border-none text-xs font-bold rounded-xl px-4 py-2 outline-none">
-              <option>Todos os Tipos</option>
-              <option>Medicamentos</option>
-              <option>Consumíveis</option>
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full py-4 bg-emerald text-white rounded-2xl font-bold hover:bg-emerald/90 transition-all shadow-lg shadow-emerald/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <PackagePlus className="w-5 h-5" />}
+            Registrar Entrada
+          </button>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={isRequestModalOpen}
+        onClose={() => setIsRequestModalOpen(false)}
+        title="Requisição Digital"
+      >
+        <form onSubmit={handleRequisition} className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase">Item</label>
+            <select
+              required
+              value={requestFormData.item_id}
+              onChange={(e) => setRequestFormData({ ...requestFormData, item_id: e.target.value })}
+              className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all"
+            >
+              <option value="">Selecionar Item</option>
+              {inventory.map(item => (
+                <option key={item.id} value={item.id}>{item.item_name} (Stock: {item.quantity})</option>
+              ))}
             </select>
           </div>
-        </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 text-slate-400 text-[10px] font-bold uppercase tracking-widest">
-                <th className="px-6 py-4">Item</th>
-                <th className="px-6 py-4">Categoria</th>
-                <th className="px-6 py-4">Stock Atual</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4">Última Entrada</th>
-                <th className="px-6 py-4 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {[
-                { name: 'Paracetamol 500mg', cat: 'Medicamento', stock: 2500, status: 'ok', date: '12 Abr 2024' },
-                { name: 'Soro Fisiológico', cat: 'Consumível', stock: 450, status: 'warning', date: '10 Abr 2024' },
-                { name: 'Insulina', cat: 'Medicamento', stock: 85, status: 'critical', date: '08 Abr 2024' },
-                { name: 'Máscaras Cirúrgicas', cat: 'Consumível', stock: 12000, status: 'ok', date: '11 Abr 2024' },
-              ].map((item, i) => (
-                <tr key={i} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4 font-bold text-slate-900">{item.name}</td>
-                  <td className="px-6 py-4 text-sm text-slate-500">{item.cat}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-700">{item.stock}</span>
-                      <ArrowDown className={cn("w-3 h-3", item.status === 'ok' ? "text-slate-300" : "text-red-500")} />
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className={cn(
-                      "w-2 h-2 rounded-full",
-                      item.status === 'ok' ? "bg-emerald-500" : item.status === 'warning' ? "bg-amber-500" : "bg-red-500"
-                    )} />
-                  </td>
-                  <td className="px-6 py-4 text-xs text-slate-400 font-medium">{item.date}</td>
-                  <td className="px-6 py-4 text-right">
-                    <button className="text-xs font-bold text-navy hover:underline">Detalhes</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase">Quantidade</label>
+              <input
+                required
+                type="number"
+                min="1"
+                value={requestFormData.quantity}
+                onChange={(e) => setRequestFormData({ ...requestFormData, quantity: Number(e.target.value) })}
+                className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase">Solicitante</label>
+              <input
+                required
+                type="text"
+                value={requestFormData.requester}
+                onChange={(e) => setRequestFormData({ ...requestFormData, requester: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all"
+                placeholder="Nome ou Setor"
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full py-4 bg-navy text-white rounded-2xl font-bold hover:bg-navy/90 transition-all shadow-lg shadow-navy/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <ClipboardList className="w-5 h-5" />}
+            Processar Requisição
+          </button>
+        </form>
+      </Modal>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-12 h-12 text-emerald animate-spin" />
         </div>
-      </div>
+      ) : (
+        <>
+          {/* Critical Alerts */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                  <AlertTriangle className="w-6 h-6 text-red-500" />
+                  Ruptura de Stock (Crítico)
+                </h3>
+                <span className="text-xs font-bold bg-red-50 text-red-600 px-3 py-1 rounded-full">
+                  {criticalItems.length} itens em alerta
+                </span>
+              </div>
+              
+              <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
+                {criticalItems.length > 0 ? criticalItems.map((item, i) => (
+                  <div key={i} className="flex items-center justify-between p-4 bg-red-50/50 rounded-2xl border border-red-100">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-white rounded-xl shadow-sm">
+                        <Pill className="w-5 h-5 text-red-500" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-slate-900">{item.item_name}</h4>
+                        <p className="text-xs text-slate-500">Stock atual: <span className="text-red-600 font-bold">{item.quantity} un</span> / Mínimo: {item.min_stock} un</p>
+                      </div>
+                    </div>
+                    <button className="px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition-all">
+                      Pedir Agora
+                    </button>
+                  </div>
+                )) : (
+                  <div className="text-center py-8 text-slate-400 italic">
+                    Nenhum item em estado crítico no momento.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
+              <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+                <Calendar className="w-6 h-6 text-amber-500" />
+                Vencimento Próximo
+              </h3>
+              <div className="h-[200px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={expiryData}>
+                    <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
+                    <Tooltip />
+                    <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                      {expiryData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.count > 50 ? '#ef4444' : '#f59e0b'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <p className="text-xs text-slate-400 mt-4 text-center">Medicamentos a vencer nos próximos 5 meses.</p>
+            </div>
+          </div>
+
+          {/* Inventory Table */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <div className="relative max-w-xs w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input 
+                  type="text" 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Pesquisar no inventário..." 
+                  className="w-full pl-10 pr-4 py-2 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all" 
+                />
+              </div>
+              <div className="flex gap-4">
+                <select className="bg-slate-50 border-none text-xs font-bold rounded-xl px-4 py-2 outline-none">
+                  <option>Todos os Tipos</option>
+                  <option>Medicamentos</option>
+                  <option>Consumíveis</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-400 text-[10px] font-bold uppercase tracking-widest">
+                    <th className="px-6 py-4">Item</th>
+                    <th className="px-6 py-4">Categoria</th>
+                    <th className="px-6 py-4">Stock Atual</th>
+                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4">Validade</th>
+                    <th className="px-6 py-4 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredInventory.length > 0 ? filteredInventory.map((item, i) => {
+                    const isCritical = item.quantity <= item.min_stock;
+                    const isWarning = item.quantity <= item.min_stock * 1.5;
+                    
+                    return (
+                      <tr key={i} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-6 py-4 font-bold text-slate-900">{item.item_name}</td>
+                        <td className="px-6 py-4 text-sm text-slate-500">{item.category}</td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <span className={cn("font-bold", isCritical ? "text-red-600" : "text-slate-700")}>
+                              {item.quantity}
+                            </span>
+                            {isCritical && <ArrowDown className="w-3 h-3 text-red-500" />}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className={cn(
+                            "w-2 h-2 rounded-full",
+                            isCritical ? "bg-red-500" : isWarning ? "bg-amber-500" : "bg-emerald-500"
+                          )} />
+                        </td>
+                        <td className="px-6 py-4 text-xs text-slate-400 font-medium">
+                          {item.expiry_date ? new Date(item.expiry_date).toLocaleDateString() : 'N/A'}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button className="text-xs font-bold text-navy hover:underline">Detalhes</button>
+                        </td>
+                      </tr>
+                    );
+                  }) : (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                        Nenhum item encontrado no inventário.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

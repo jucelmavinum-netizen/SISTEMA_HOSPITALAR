@@ -46,64 +46,158 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ user }: DashboardProps) {
-  const [patientCount, setPatientCount] = React.useState<number | null>(null);
+  const [stats, setStats] = React.useState({
+    patientCount: 0,
+    staffCount: 0,
+    criticalStock: 0,
+    triageStats: [] as any[],
+    recentPatients: [] as any[],
+    monthlyRevenue: 0
+  });
   const [isLoading, setIsLoading] = React.useState(true);
 
   React.useEffect(() => {
-    const fetchStats = async () => {
-      const { count, error } = await supabase
-        .from('patients')
-        .select('*', { count: 'exact', head: true });
-      
-      if (!error) setPatientCount(count);
-      setIsLoading(false);
+    const fetchDashboardData = async () => {
+      setIsLoading(true);
+      try {
+        // 1. Patient Count
+        const { count: pCount } = await supabase
+          .from('patients')
+          .select('*', { count: 'exact', head: true });
+
+        // 2. Staff Count
+        const { count: sCount } = await supabase
+          .from('profiles')
+          .select('*', { count: 'exact', head: true });
+
+        // 3. Critical Stock
+        const { data: inventory } = await supabase
+          .from('inventory')
+          .select('quantity, min_stock');
+        const cStock = inventory?.filter(item => item.quantity <= item.min_stock).length || 0;
+
+        // 4. Triage Stats
+        const { data: triage } = await supabase
+          .from('triage_records')
+          .select('classification');
+        
+        const triageCounts = triage?.reduce((acc: any, curr) => {
+          acc[curr.classification] = (acc[curr.classification] || 0) + 1;
+          return acc;
+        }, {});
+
+        const formattedTriage = [
+          { sector: 'Vermelho', count: triageCounts?.red || 0, color: '#ef4444' },
+          { sector: 'Laranja', count: triageCounts?.orange || 0, color: '#f97316' },
+          { sector: 'Amarelo', count: triageCounts?.yellow || 0, color: '#eab308' },
+          { sector: 'Verde', count: triageCounts?.green || 0, color: '#10b981' },
+          { sector: 'Azul', count: triageCounts?.blue || 0, color: '#3b82f6' },
+        ];
+
+        // 5. Recent Patients
+        const { data: recent } = await supabase
+          .from('patients')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        // Fetch Monthly Revenue
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+
+        const { data: revenueData } = await supabase
+          .from('finance_records')
+          .select('amount')
+          .eq('type', 'income')
+          .gte('created_at', startOfMonth.toISOString());
+
+        const monthlyRevenue = revenueData?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
+
+        setStats({
+          patientCount: pCount || 0,
+          staffCount: sCount || 0,
+          criticalStock: cStock,
+          triageStats: formattedTriage,
+          recentPatients: recent || [],
+          monthlyRevenue
+        });
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
-    fetchStats();
+    fetchDashboardData();
   }, []);
 
   const renderAdminDashboard = () => (
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { label: 'Receita Mensal', value: '12.4M Kz', icon: Wallet, trend: '+8%', color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          { label: 'Custo Operacional', value: '8.2M Kz', icon: TrendingUp, trend: '+2%', color: 'text-blue-600', bg: 'bg-blue-50' },
-          { label: 'Pacientes Totais', value: isLoading ? '...' : patientCount?.toString() || '0', icon: Users, trend: 'Base de Dados', color: 'text-amber-600', bg: 'bg-amber-50' },
-          { label: 'Ruptura de Stock', value: '05', icon: Package, trend: '-12%', color: 'text-red-600', bg: 'bg-red-50' },
+          { label: 'Receita Mensal', value: isLoading ? '...' : `${(stats.monthlyRevenue / 1000000).toFixed(1)}M Kz`, icon: Wallet, trend: '+8%', color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          { label: 'Funcionários Ativos', value: isLoading ? '...' : stats.staffCount.toString(), icon: Users, trend: 'Estável', color: 'text-blue-600', bg: 'bg-blue-50' },
+          { label: 'Pacientes Totais', value: isLoading ? '...' : stats.patientCount.toString(), icon: Users, trend: 'Base de Dados', color: 'text-amber-600', bg: 'bg-amber-50' },
+          { label: 'Ruptura de Stock', value: isLoading ? '...' : stats.criticalStock.toString().padStart(2, '0'), icon: Package, trend: 'Crítico', color: 'text-red-600', bg: 'bg-red-50' },
         ].map((stat, i) => (
           <StatCard key={i} {...stat} delay={i * 0.1} />
         ))}
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
-          <h3 className="text-xl font-bold text-slate-900 mb-6">Desempenho Financeiro (Últimos 6 Meses)</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
+          <div className="flex items-center justify-between mb-8">
+            <h3 className="text-xl font-bold text-slate-900">Ocupação por Classificação (Triagem)</h3>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-emerald-500" />
+              <span className="text-xs font-medium text-slate-500">Tempo Real</span>
+            </div>
+          </div>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={[
-                { month: 'Jan', revenue: 10, cost: 7 },
-                { month: 'Fev', revenue: 11, cost: 7.5 },
-                { month: 'Mar', revenue: 12.4, cost: 8.2 },
-              ]}>
+              <BarChart data={stats.triageStats}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                <XAxis dataKey="sector" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                <Tooltip />
-                <Bar dataKey="revenue" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="cost" fill="#1e3a8a" radius={[4, 4, 0, 0]} />
+                <Tooltip 
+                  cursor={{ fill: '#f8fafc' }}
+                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                />
+                <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                  {stats.triageStats.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
+
         <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
-          <h3 className="text-xl font-bold text-slate-900 mb-6">Distribuição de Recursos</h3>
+          <h3 className="text-xl font-bold text-slate-900 mb-6">Últimos Pacientes Admitidos</h3>
           <div className="space-y-4">
-            {['Médicos', 'Enfermeiros', 'Técnicos', 'Administrativos'].map((cat, i) => (
-              <div key={i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
-                <span className="font-bold text-slate-700">{cat}</span>
-                <span className="text-navy font-bold">{[85, 142, 65, 50][i]}</span>
+            {stats.recentPatients.length > 0 ? stats.recentPatients.map((patient, i) => (
+              <div key={i} className="flex items-center gap-4 p-3 hover:bg-slate-50 rounded-2xl transition-colors">
+                <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-bold text-slate-600 text-xs">
+                  {patient.full_name.split(' ').map((n: string) => n[0]).join('')}
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-sm font-bold text-slate-900">{patient.full_name}</h4>
+                  <p className="text-[10px] text-slate-400 uppercase font-bold">{patient.process_number}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] text-slate-400 font-medium">{new Date(patient.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                </div>
               </div>
-            ))}
+            )) : (
+              <div className="text-center py-12 text-slate-400 italic">
+                Nenhum paciente admitido recentemente.
+              </div>
+            )}
           </div>
+          <button className="w-full mt-6 py-3 text-sm font-bold text-emerald hover:bg-emerald-50 rounded-xl transition-all">
+            Ver Todos os Registros
+          </button>
         </div>
       </div>
     </div>

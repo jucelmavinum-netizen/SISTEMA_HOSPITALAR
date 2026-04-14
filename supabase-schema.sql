@@ -57,13 +57,69 @@ ALTER TABLE patients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE triage_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE inventory ENABLE ROW LEVEL SECURITY;
 
--- Policies
-CREATE POLICY "Profiles are viewable by everyone" ON profiles FOR SELECT USING (true);
-CREATE POLICY "Patients are viewable by authenticated users" ON patients FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "Inventory viewable by admin and nurse" ON inventory FOR SELECT USING (
-  EXISTS (
-    SELECT 1 FROM profiles 
-    WHERE profiles.id = auth.uid() 
-    AND profiles.role IN ('admin', 'nurse')
-  )
+-- 5. Exams
+CREATE TABLE exams (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
+  exam_type TEXT NOT NULL,
+  status TEXT CHECK (status IN ('pending', 'processing', 'ready')) DEFAULT 'pending',
+  requester_id UUID REFERENCES auth.users(id),
+  result TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 6. Beds
+CREATE TABLE beds (
+  id TEXT PRIMARY KEY,
+  ward TEXT NOT NULL,
+  status TEXT CHECK (status IN ('available', 'occupied', 'cleaning')) DEFAULT 'available',
+  patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
+  last_updated TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 7. Appointments
+CREATE TABLE appointments (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
+  doctor_id UUID REFERENCES auth.users(id),
+  appointment_date TIMESTAMPTZ NOT NULL,
+  status TEXT CHECK (status IN ('scheduled', 'completed', 'cancelled')) DEFAULT 'scheduled',
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 8. Finance Records
+CREATE TABLE finance_records (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  type TEXT CHECK (type IN ('income', 'expense')),
+  category TEXT NOT NULL,
+  amount DECIMAL(12, 2) NOT NULL,
+  description TEXT,
+  recorded_by UUID REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable RLS for new tables
+ALTER TABLE exams ENABLE ROW LEVEL SECURITY;
+ALTER TABLE beds ENABLE ROW LEVEL SECURITY;
+ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE finance_records ENABLE ROW LEVEL SECURITY;
+
+-- 9. Consultations
+CREATE TABLE consultations (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
+  doctor_id UUID REFERENCES auth.users(id),
+  triage_id UUID REFERENCES triage_records(id),
+  symptoms TEXT,
+  diagnosis TEXT,
+  prescription TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable RLS
+ALTER TABLE consultations ENABLE ROW LEVEL SECURITY;
+
+-- Policies
+CREATE POLICY "Authenticated users can access consultations" ON consultations FOR ALL USING (auth.role() = 'authenticated');

@@ -14,26 +14,52 @@ import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 
 export default function Login() {
+  const [isRegistering, setIsRegistering] = React.useState(false);
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
+  const [fullName, setFullName] = React.useState('');
+  const [role, setRole] = React.useState('reception');
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [message, setMessage] = React.useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+    setMessage(null);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    if (isRegistering) {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            role: role,
+          }
+        }
+      });
 
-    if (error) {
-      setError(error.message === 'Invalid login credentials' ? 'Credenciais inválidas. Verifique seu email e senha.' : error.message);
-      setIsLoading(false);
+      if (error) {
+        setError(error.message);
+        setIsLoading(false);
+      } else {
+        setMessage('Cadastro realizado! Verifique seu email para confirmar a conta (se habilitado) ou tente fazer login.');
+        setIsLoading(false);
+        setIsRegistering(false);
+      }
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        setError(error.message === 'Invalid login credentials' ? 'Credenciais inválidas. Verifique seu email e senha.' : error.message);
+        setIsLoading(false);
+      }
     }
-    // App.tsx handles the session change
   };
 
   return (
@@ -80,12 +106,18 @@ export default function Login() {
           </div>
         </div>
 
-        {/* Right Side - Login Form */}
+        {/* Right Side - Login/Register Form */}
         <div className="p-12 lg:p-20 flex flex-col justify-center">
           <div className="max-w-md mx-auto w-full space-y-8">
             <div>
-              <h3 className="text-3xl font-bold text-slate-900">Acesso ao Sistema</h3>
-              <p className="text-slate-500 mt-2">Entre com suas credenciais institucionais.</p>
+              <h3 className="text-3xl font-bold text-slate-900">
+                {isRegistering ? 'Criar Nova Conta' : 'Acesso ao Sistema'}
+              </h3>
+              <p className="text-slate-500 mt-2">
+                {isRegistering 
+                  ? 'Preencha os dados para se cadastrar como profissional.' 
+                  : 'Entre com suas credenciais institucionais.'}
+              </p>
             </div>
 
             {error && (
@@ -99,7 +131,55 @@ export default function Login() {
               </motion.div>
             )}
 
+            {message && (
+              <motion.div 
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-3 text-emerald-600 text-sm font-medium"
+              >
+                <ShieldCheck className="w-5 h-5 shrink-0" />
+                {message}
+              </motion.div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-5">
+              {isRegistering && (
+                <>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Nome Completo</label>
+                    <div className="relative">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
+                      <input 
+                        required
+                        type="text" 
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        placeholder="António João Manuel"
+                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald focus:bg-white transition-all font-medium text-slate-700"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Perfil de Acesso</label>
+                    <div className="relative">
+                      <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
+                      <select 
+                        required
+                        value={role}
+                        onChange={(e) => setRole(e.target.value)}
+                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald focus:bg-white transition-all appearance-none font-medium text-slate-700"
+                      >
+                        <option value="admin">Administrador</option>
+                        <option value="doctor">Médico / Especialista</option>
+                        <option value="nurse">Enfermeiro / Triagem</option>
+                        <option value="reception">Recepção / Atendimento</option>
+                      </select>
+                    </div>
+                  </div>
+                </>
+              )}
+
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Email Institucional</label>
                 <div className="relative">
@@ -139,15 +219,28 @@ export default function Login() {
                   <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
                   <>
-                    Entrar no Sistema
+                    {isRegistering ? 'Criar Conta' : 'Entrar no Sistema'}
                     <ChevronRight className="w-6 h-6" />
                   </>
                 )}
               </button>
             </form>
 
-            <div className="pt-6 border-t border-slate-100">
-              <p className="text-center text-sm text-slate-400">
+            <div className="pt-6 border-t border-slate-100 text-center space-y-4">
+              <p className="text-sm text-slate-500">
+                {isRegistering ? 'Já tem uma conta?' : 'Ainda não tem acesso?'}
+                <button 
+                  onClick={() => {
+                    setIsRegistering(!isRegistering);
+                    setError(null);
+                    setMessage(null);
+                  }}
+                  className="ml-2 text-emerald font-bold hover:underline"
+                >
+                  {isRegistering ? 'Fazer Login' : 'Solicitar Cadastro'}
+                </button>
+              </p>
+              <p className="text-xs text-slate-400">
                 Problemas com o acesso? <button className="text-emerald font-bold hover:underline">Contate o suporte técnico MINSA</button>
               </p>
             </div>
