@@ -33,12 +33,21 @@ interface LayoutProps {
     municipality: string;
     hospital: string;
     role: string;
+    full_name?: string;
   };
   onLogout: () => void;
 }
 
 export default function Layout({ children, activeTab, setActiveTab, isOffline, user, onLogout }: LayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
+  const [isNotificationsOpen, setIsNotificationsOpen] = React.useState(false);
+
+  const getInitials = (name?: string) => {
+    if (!name) return '??';
+    const parts = name.split(' ');
+    if (parts.length >= 2) return `${parts[0][0]}${parts[parts.length-1][0]}`.toUpperCase();
+    return name.slice(0, 2).toUpperCase();
+  };
 
   const roleLabels: Record<string, string> = {
     admin: 'Administrador',
@@ -143,22 +152,63 @@ export default function Layout({ children, activeTab, setActiveTab, isOffline, u
               )}
             </div>
 
-            <button className="relative p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors">
-              <Bell className="w-6 h-6" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-            </button>
+            <div className="relative">
+              <button 
+                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                className={cn(
+                  "relative p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors",
+                  isNotificationsOpen && "bg-slate-100 text-emerald"
+                )}
+              >
+                <Bell className="w-6 h-6" />
+                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+              </button>
+
+              {isNotificationsOpen && (
+                <div className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[60] py-2">
+                  <div className="px-4 py-3 border-b border-slate-50 flex justify-between items-center">
+                    <h4 className="font-bold text-slate-900">Notificações</h4>
+                    <span className="text-[10px] font-bold bg-red-100 text-red-600 px-2 py-0.5 rounded-full">2 Novas</span>
+                  </div>
+                  <div className="max-h-96 overflow-y-auto">
+                    {[
+                      { title: 'Resultado de Exame', desc: 'Maria Domingos - Sangue liberado', time: '10 min ago', type: 'lab', target: 'laboratory' },
+                      { title: 'Novo Agendamento', desc: 'Consulta para amanhã às 09:00', time: '1h ago', type: 'app', target: 'scheduling' },
+                    ].map((n, i) => (
+                      <button 
+                        key={i} 
+                        onClick={() => {
+                          setActiveTab(n.target);
+                          setIsNotificationsOpen(false);
+                        }}
+                        className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-all border-b border-slate-50 last:border-0 group"
+                      >
+                        <p className="text-sm font-bold text-slate-900 group-hover:text-emerald">{n.title}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{n.desc}</p>
+                        <p className="text-[10px] text-slate-400 mt-1 font-medium italic">{n.time}</p>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="px-4 py-2 text-center border-t border-slate-50">
+                    <button className="text-[10px] font-bold text-emerald hover:underline">Ver Todas</button>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="flex items-center gap-3 pl-6 border-l border-slate-200">
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-bold text-slate-900 leading-none">{user.hospital}</p>
-                <p className="text-[10px] text-emerald font-bold uppercase mt-1">{roleLabels[user.role] || user.role}</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">{user.municipality}, {user.province}</p>
+                <p className="text-sm font-bold text-slate-900 leading-none">{user.full_name || user.hospital}</p>
+                <p className="text-[10px] text-emerald font-bold uppercase mt-1">
+                  {user.role === 'doctor' ? `Dr. ${user.full_name?.split(' ')[0]}` : (roleLabels[user.role] || user.role)}
+                </p>
+                <p className="text-[10px] text-slate-400 mt-0.5">{user.hospital}</p>
               </div>
               <button 
                 onClick={onLogout}
                 className="w-10 h-10 bg-navy rounded-full flex items-center justify-center text-white font-bold hover:bg-red-600 transition-colors group relative"
               >
-                <span className="group-hover:hidden">MN</span>
+                <span className="group-hover:hidden">{getInitials(user.full_name)}</span>
                 <LogOut className="w-5 h-5 hidden group-hover:block" />
                 <span className="absolute -bottom-8 right-0 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Sair do Sistema</span>
               </button>

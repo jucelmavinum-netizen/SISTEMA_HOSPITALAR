@@ -43,13 +43,23 @@ export default function Triage() {
       const { data, error } = await supabase
         .from('patients')
         .select('*')
-        .or(`bi_number.eq.${searchTerm},process_number.eq.${searchTerm}`)
-        .single();
+        .or(`bi_number.eq.${searchTerm},process_number.eq.${searchTerm},full_name.ilike.%${searchTerm}%`);
 
-      if (error) {
-        setError('Paciente não encontrado. Verifique o B.I. ou Nº de Processo.');
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        setError('Paciente não encontrado. Verifique o B.I., Nº de Processo ou Nome.');
+      } else if (data.length > 1) {
+        // Prioritize exact matches on numbers
+        const exactMatch = data.find(p => p.bi_number === searchTerm || p.process_number === searchTerm);
+        if (exactMatch) {
+          setPatient(exactMatch);
+        } else {
+          setError(`Foram encontrados ${data.length} pacientes. Mostrando o primeiro resultado ou refine a busca.`);
+          setPatient(data[0]);
+        }
       } else {
-        setPatient(data);
+        setPatient(data[0]);
       }
     } catch (err: any) {
       setError(err.message);
@@ -132,7 +142,7 @@ export default function Triage() {
       <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
         <div className="flex flex-col md:flex-row gap-4 items-end">
           <div className="flex-1 space-y-2">
-            <label className="text-xs font-bold text-slate-400 uppercase ml-1">Buscar Paciente (B.I. ou Nº Processo)</label>
+            <label className="text-xs font-bold text-slate-400 uppercase ml-1">Buscar Paciente (Nome, B.I. ou Nº Processo)</label>
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
               <input 
@@ -140,7 +150,7 @@ export default function Triage() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                placeholder="Ex: 001234567LA041"
+                placeholder="Ex: António João ou 00123..."
                 className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald transition-all font-medium"
               />
             </div>

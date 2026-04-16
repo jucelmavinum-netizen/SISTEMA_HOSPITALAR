@@ -8,7 +8,8 @@ import {
   MoreVertical,
   AlertCircle,
   Loader2,
-  UserPlus
+  UserPlus,
+  CheckCircle2
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -38,11 +39,15 @@ export default function BedsManagement() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [selectedWard, setSelectedWard] = React.useState('all');
   const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = React.useState(false);
+  const [isStatusModalOpen, setIsStatusModalOpen] = React.useState(false);
+  const [selectedBed, setSelectedBed] = React.useState<any>(null);
 
   const [formData, setFormData] = React.useState({
     patient_id: '',
     bed_id: '',
-    notes: ''
+    notes: '',
+    new_bed_id: ''
   });
 
   React.useEffect(() => {
@@ -125,27 +130,67 @@ export default function BedsManagement() {
     }
   };
 
-  const handleDischarge = async (bedId: string) => {
-    if (!window.confirm('Tem certeza que deseja dar alta a este paciente?')) return;
-    
+  const handleUpdateBedStatus = async (bedId: string, status: string) => {
     setIsLoading(true);
     try {
       const { error } = await supabase
+        .from('beds')
+        .update({
+          status,
+          last_updated: new Date().toISOString(),
+          ...(status === 'available' || status === 'cleaning' ? { patient_id: null } : {})
+        })
+        .eq('id', bedId);
+
+      if (error) throw error;
+      setIsStatusModalOpen(false);
+      fetchBeds();
+    } catch (error) {
+      console.error('Error updating bed status:', error);
+      alert('Erro ao atualizar status do leito.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleTransferPatient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedBed || !formData.new_bed_id) return;
+    setIsSubmitting(true);
+
+    try {
+      // 1. Clear old bed
+      await supabase
         .from('beds')
         .update({
           patient_id: null,
           status: 'cleaning',
           last_updated: new Date().toISOString()
         })
-        .eq('id', bedId);
+        .eq('id', selectedBed.id);
+
+      // 2. Populate new bed
+      const { error } = await supabase
+        .from('beds')
+        .update({
+          patient_id: selectedBed.patient_id,
+          status: 'occupied',
+          last_updated: new Date().toISOString()
+        })
+        .eq('id', formData.new_bed_id);
 
       if (error) throw error;
+
+      alert('Transferência realizada com sucesso!');
+      setIsTransferModalOpen(false);
+      setSelectedBed(null);
+      setFormData(prev => ({ ...prev, new_bed_id: '' }));
       fetchBeds();
     } catch (error) {
-      console.error('Error discharging patient:', error);
-      alert('Erro ao processar alta médica.');
+      console.error('Error transferring patient:', error);
+      alert('Erro ao realizar transferência.');
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -252,6 +297,112 @@ export default function BedsManagement() {
             Confirmar Internamento
           </button>
         </form>
+      </Modal>
+
+      <Modal
+        isOpen={isTransferModalOpen}
+        onClose={() => setIsTransferModalOpen(false)}
+        title="Transferência de Leito"
+      >
+        <form onSubmit={handleTransferPatient} className="space-y-4">
+          {selectedBed && (
+            <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl">
+              <p className="text-[10px] font-bold text-blue-600 uppercase">Paciente Atual</p>
+              <p className="font-bold text-slate-900">{selectedBed.patients?.full_name}</p>
+              <p className="text-xs text-slate-500">Leito Atual: {selectedBed.id}</p>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase">Novo Leito Destino</label>
+            <select
+              required
+              value={formData.new_bed_id}
+              onChange={(e) => setFormData({ ...formData, new_bed_id: e.target.value })}
+              className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all"
+            >
+              <option value="">Selecionar Leito Vazio</option>
+              {beds.filter(b => b.status === 'available').map(b => (
+                <option key={b.id} value={b.id}>{b.id} - {b.ward}</option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full py-4 bg-navy text-white rounded-2xl font-bold hover:bg-navy/90 transition-all flex items-center justify-center gap-2"
+          >
+            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRightLeft className="w-5 h-5" />}
+            Confirmar Transferência
+          </button>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={isStatusModalOpen}
+        onClose={() => setIsStatusModalOpen(false)}
+        title="Gestão de Status do Leito"
+      >
+        <div className="space-y-6">
+          {selectedBed && (
+            <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl text-center">
+              <p className="text-[10px] font-bold text-slate-400 uppercase">Leito Selecionado</p>
+              <p className="text-lg font-bold text-slate-900">{selectedBed.id}</p>
+              <p className="text-xs text-slate-500 capitalize">Status Atual: {selectedBed.status}</p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-3">
+            {selectedBed?.status === 'occupied' && (
+              <button
+                onClick={() => handleUpdateBedStatus(selectedBed.id, 'cleaning')}
+                className="w-full p-4 bg-amber-50 text-amber-700 border border-amber-100 rounded-2xl font-bold hover:bg-amber-100 transition-all flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white rounded-lg"><LogOut className="w-5 h-5" /></div>
+                  <div className="text-left">
+                    <p>Processar Alta Médica</p>
+                    <p className="text-[10px] font-normal opacity-70">O leito entrará em fase de limpeza.</p>
+                  </div>
+                </div>
+                <Users className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
+            )}
+
+            {(selectedBed?.status === 'cleaning' || selectedBed?.status === 'occupied') && (
+              <button
+                onClick={() => handleUpdateBedStatus(selectedBed.id, 'available')}
+                className="w-full p-4 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-2xl font-bold hover:bg-emerald-100 transition-all flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white rounded-lg"><CheckCircle2 className="w-5 h-5" /></div>
+                  <div className="text-left">
+                    <p>Libertar Leito (Disponível)</p>
+                    <p className="text-[10px] font-normal opacity-70">Confirma que o leito está pronto para novo paciente.</p>
+                  </div>
+                </div>
+                <Bed className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
+            )}
+
+            {selectedBed?.status === 'available' && (
+              <button
+                onClick={() => handleUpdateBedStatus(selectedBed.id, 'cleaning')}
+                className="w-full p-4 bg-slate-50 text-slate-700 border border-slate-200 rounded-2xl font-bold hover:bg-slate-100 transition-all flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white rounded-lg"><LogOut className="w-5 h-5" /></div>
+                  <div className="text-left">
+                    <p>Enviar para Limpeza</p>
+                    <p className="text-[10px] font-normal opacity-70">Marcar leito para manutenção/higiene.</p>
+                  </div>
+                </div>
+                <MoreVertical className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
+            )}
+          </div>
+        </div>
       </Modal>
 
       {isLoading ? (
@@ -394,17 +545,38 @@ export default function BedsManagement() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button className="p-2 hover:bg-white rounded-lg text-slate-400 hover:text-blue-600 transition-colors" title="Transferência Interna">
-                            <ArrowRightLeft className="w-4 h-4" />
-                          </button>
+                          {bed.status === 'occupied' && (
+                            <>
+                              <button 
+                                onClick={() => {
+                                  setSelectedBed(bed);
+                                  setIsTransferModalOpen(true);
+                                }}
+                                className="p-2 hover:bg-white rounded-lg text-slate-400 hover:text-blue-600 transition-colors" 
+                                title="Transferência Interna"
+                              >
+                                <ArrowRightLeft className="w-4 h-4" />
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  setSelectedBed(bed);
+                                  setIsStatusModalOpen(true);
+                                }}
+                                className="p-2 hover:bg-white rounded-lg text-slate-400 hover:text-red-600 transition-colors" 
+                                title="Alta Médica"
+                              >
+                                <LogOut className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
                           <button 
-                            onClick={() => handleDischarge(bed.id)}
-                            className="p-2 hover:bg-white rounded-lg text-slate-400 hover:text-red-600 transition-colors" 
-                            title="Alta Médica"
+                            onClick={() => {
+                              setSelectedBed(bed);
+                              setIsStatusModalOpen(true);
+                            }}
+                            className="p-2 hover:bg-white rounded-lg text-slate-400 hover:text-emerald transition-colors"
+                            title="Gerir Status do Leito"
                           >
-                            <LogOut className="w-4 h-4" />
-                          </button>
-                          <button className="p-2 hover:bg-white rounded-lg text-slate-400">
                             <MoreVertical className="w-4 h-4" />
                           </button>
                         </div>
