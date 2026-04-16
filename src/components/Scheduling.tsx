@@ -41,6 +41,8 @@ export default function Scheduling() {
   const [selectedAppointment, setSelectedAppointment] = React.useState<any>(null);
   const [viewTab, setViewTab] = React.useState<'active' | 'history'>('active');
 
+  const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
+
   const [formData, setFormData] = React.useState({
     patient_id: '',
     doctor_id: '',
@@ -102,14 +104,13 @@ export default function Scheduling() {
     setIsSubmitting(true);
 
     try {
-      const dateTime = `${formData.appointment_date}T${formData.appointment_time}:00`;
-      
       const { error } = await supabase
         .from('appointments')
         .insert([{
           patient_id: formData.patient_id,
           doctor_id: formData.doctor_id,
-          appointment_date: dateTime,
+          appointment_date: formData.appointment_date,
+          appointment_time: formData.appointment_time,
           status: 'scheduled',
           type: formData.type,
           notes: formData.notes
@@ -127,9 +128,50 @@ export default function Scheduling() {
         notes: ''
       });
       fetchData();
-    } catch (error) {
+      alert('Agendamento realizado com sucesso!');
+    } catch (error: any) {
       console.error('Error creating appointment:', error);
-      alert('Erro ao marcar consulta. Por favor, tente novamente.');
+      alert('Erro ao marcar consulta: ' + (error.message || 'Verifique os dados e tente novamente.'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdateAppointment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAppointment) return;
+    setIsSubmitting(true);
+
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .update({
+          patient_id: formData.patient_id,
+          doctor_id: formData.doctor_id,
+          appointment_date: formData.appointment_date,
+          appointment_time: formData.appointment_time,
+          type: formData.type,
+          notes: formData.notes
+        })
+        .eq('id', selectedAppointment.id);
+
+      if (error) throw error;
+
+      setIsEditModalOpen(false);
+      setSelectedAppointment(null);
+      setFormData({
+        patient_id: '',
+        doctor_id: '',
+        appointment_date: '',
+        appointment_time: '',
+        type: 'Consulta',
+        notes: ''
+      });
+      fetchData();
+      alert('Agendamento atualizado com sucesso!');
+    } catch (error: any) {
+      console.error('Error updating appointment:', error);
+      alert('Erro ao atualizar consulta: ' + error.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -149,7 +191,7 @@ export default function Scheduling() {
           patient_id: selectedAppointment.patient_id,
           doctor_id: selectedAppointment.doctor_id,
           triage_id: triageData?.id || null,
-          symptoms: consultationData.symptoms,
+          complaint: consultationData.symptoms, // Changed from symptoms to complaint to match SQL
           diagnosis: consultationData.diagnosis,
           prescription: consultationData.prescription,
           notes: consultationData.notes
@@ -329,6 +371,100 @@ export default function Scheduling() {
             </button>
           </form>
         )}
+      </Modal>
+
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Editar Agendamento"
+      >
+        <form onSubmit={handleUpdateAppointment} className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase">Paciente</label>
+            <select
+              required
+              value={formData.patient_id}
+              onChange={(e) => setFormData({ ...formData, patient_id: e.target.value })}
+              className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all"
+            >
+              <option value="">Selecionar Paciente</option>
+              {patients.map(p => (
+                <option key={p.id} value={p.id}>{p.full_name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase">Médico</label>
+            <select
+              required
+              value={formData.doctor_id}
+              onChange={(e) => setFormData({ ...formData, doctor_id: e.target.value })}
+              className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all"
+            >
+              <option value="">Selecionar Médico</option>
+              {doctors.map(d => (
+                <option key={d.id} value={d.id}>{d.full_name} ({d.role})</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase">Data</label>
+              <input
+                required
+                type="date"
+                value={formData.appointment_date}
+                onChange={(e) => setFormData({ ...formData, appointment_date: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase">Horário</label>
+              <input
+                required
+                type="time"
+                value={formData.appointment_time}
+                onChange={(e) => setFormData({ ...formData, appointment_time: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase">Tipo de Atendimento</label>
+            <select
+              value={formData.type}
+              onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+              className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all"
+            >
+              <option value="Consulta">Consulta</option>
+              <option value="Retorno">Retorno</option>
+              <option value="Exame">Exame</option>
+              <option value="Urgência">Urgência</option>
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase">Notas Adicionais</label>
+            <textarea
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all h-24 resize-none"
+              placeholder="Motivo da consulta, observações..."
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full py-4 bg-navy text-white rounded-2xl font-bold hover:bg-navy/90 transition-all shadow-lg shadow-navy/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CalendarDays className="w-5 h-5" />}
+            Guardar Alterações
+          </button>
+        </form>
       </Modal>
 
       <Modal
@@ -539,11 +675,11 @@ export default function Scheduling() {
                           <div className="flex flex-col gap-1">
                             <div className="flex items-center gap-2 text-slate-900 font-bold">
                               <Calendar className="w-4 h-4 text-slate-300" />
-                              {new Date(app.appointment_date).toLocaleDateString()}
+                              {app.appointment_date}
                             </div>
                             <div className="flex items-center gap-2 text-slate-500 text-xs">
                               <Clock className="w-4 h-4 text-slate-300" />
-                              {new Date(app.appointment_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              {app.appointment_time?.slice(0, 5)}
                             </div>
                           </div>
                         </td>
@@ -599,31 +735,54 @@ export default function Scheduling() {
                               </button>
                             )}
                             {app.status === 'scheduled' && (
-                              <button 
-                                onClick={async (e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  
-                                  if (!window.confirm('Tem certeza que deseja cancelar definitivamente este agendamento?')) return;
-                                  
-                                  const { error } = await supabase
-                                    .from('appointments')
-                                    .update({ status: 'cancelled' })
-                                    .eq('id', app.id);
+                              <>
+                                <button 
+                                  onClick={() => {
+                                    setSelectedAppointment(app);
+                                    setFormData({
+                                      patient_id: app.patient_id,
+                                      doctor_id: app.doctor_id,
+                                      appointment_date: app.appointment_date,
+                                      appointment_time: app.appointment_time,
+                                      type: app.type,
+                                      notes: app.notes || ''
+                                    });
+                                    setIsEditModalOpen(true);
+                                  }}
+                                  className="p-2 hover:bg-blue-50 rounded-lg text-slate-400 hover:text-navy transition-colors" 
+                                  title="Editar Agendamento"
+                                >
+                                  <ClipboardList className="w-4 h-4" />
+                                </button>
+                                <button 
+                                  onClick={async (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
                                     
-                                  if (error) {
-                                    console.error('Error cancelling appointment:', error);
-                                    alert('Erro ao cancelar agendamento: ' + error.message);
-                                  } else {
-                                    alert('Agendamento cancelado com sucesso.');
-                                    await fetchData();
-                                  }
-                                }}
-                                className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-600 transition-colors" 
-                                title="Cancelar Agendamento"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
+                                    const confirmed = confirm('Deseja realmente remover este agendamento do sistema?');
+                                    if (!confirmed) return;
+
+                                    try {
+                                      const { error } = await supabase
+                                        .from('appointments')
+                                        .delete()
+                                        .eq('id', app.id);
+                                        
+                                      if (error) throw error;
+                                      
+                                      alert('Agendamento removido com sucesso.');
+                                      await fetchData();
+                                    } catch (error: any) {
+                                      console.error('Error deleting appointment:', error);
+                                      alert('Erro ao excluir agendamento: ' + error.message);
+                                    }
+                                  }}
+                                  className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-600 transition-colors" 
+                                  title="Excluir Agendamento"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </>
                             )}
                           </div>
                         </td>
