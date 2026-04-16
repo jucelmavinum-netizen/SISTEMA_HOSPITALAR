@@ -13,7 +13,8 @@ import {
   Stethoscope,
   ClipboardList,
   CheckCircle2,
-  X
+  X,
+  History
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -38,6 +39,7 @@ export default function Scheduling() {
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [isConsultationModalOpen, setIsConsultationModalOpen] = React.useState(false);
   const [selectedAppointment, setSelectedAppointment] = React.useState<any>(null);
+  const [viewTab, setViewTab] = React.useState<'active' | 'history'>('active');
 
   const [formData, setFormData] = React.useState({
     patient_id: '',
@@ -63,29 +65,36 @@ export default function Scheduling() {
 
   const fetchData = async () => {
     setIsLoading(true);
-    const { data: appData } = await supabase
-      .from('appointments')
-      .select(`
-        *,
-        patients (full_name),
-        profiles:doctor_id (full_name, role)
-      `)
-      .order('appointment_date');
-    
-    const { data: docData } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('role', 'doctor');
+    try {
+      const { data: appData, error: fetchError } = await supabase
+        .from('appointments')
+        .select(`
+          *,
+          patients (full_name),
+          profiles:doctor_id (full_name, role)
+        `)
+        .order('appointment_date', { ascending: true });
+      
+      if (fetchError) throw fetchError;
 
-    const { data: patData } = await supabase
-      .from('patients')
-      .select('id, full_name')
-      .order('full_name');
+      const { data: docData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('role', 'doctor');
 
-    if (appData) setAppointments(appData);
-    if (docData) setDoctors(docData);
-    if (patData) setPatients(patData);
-    setIsLoading(false);
+      const { data: patData } = await supabase
+        .from('patients')
+        .select('id, full_name')
+        .order('full_name');
+
+      if (appData) setAppointments(appData);
+      if (docData) setDoctors(docData);
+      if (patData) setPatients(patData);
+    } catch (err) {
+      console.error('Error fetching scheduling data:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCreateAppointment = async (e: React.FormEvent) => {
@@ -146,7 +155,10 @@ export default function Scheduling() {
           notes: consultationData.notes
         }]);
 
-      if (consError) throw consError;
+      if (consError) {
+        console.error('Consultation Insert Error:', consError);
+        throw new Error('Erro ao salvar os dados da consulta.');
+      }
 
       // 2. Update Appointment Status
       const { error: appError } = await supabase
@@ -154,7 +166,10 @@ export default function Scheduling() {
         .update({ status: 'completed' })
         .eq('id', selectedAppointment.id);
 
-      if (appError) throw appError;
+      if (appError) {
+        console.error('Appointment Update Error:', appError);
+        throw new Error('Erro ao atualizar o status do agendamento.');
+      }
 
       alert('Atendimento finalizado com sucesso!');
       setIsConsultationModalOpen(false);
@@ -165,21 +180,27 @@ export default function Scheduling() {
         prescription: '',
         notes: ''
       });
-      fetchData();
-    } catch (error) {
+      await fetchData();
+    } catch (error: any) {
       console.error('Error completing consultation:', error);
-      alert('Erro ao finalizar consulta.');
+      alert(error.message || 'Erro ao finalizar consulta.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const filteredAppointments = appointments.filter(app => 
-    app.status === 'scheduled' && (
+  const filteredAppointments = appointments.filter(app => {
+    const matchesSearch = (
       (app.patients?.full_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (app.profiles?.full_name || '').toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  );
+    );
+    
+    if (viewTab === 'active') {
+      return app.status === 'scheduled' && matchesSearch;
+    } else {
+      return (app.status === 'completed' || app.status === 'cancelled') && matchesSearch;
+    }
+  });
 
   return (
     <div className="space-y-8">
@@ -462,10 +483,31 @@ export default function Scheduling() {
           {/* Appointments List */}
           <div className="lg:col-span-3 space-y-6">
             <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-4">
-                  <h3 className="text-xl font-bold text-slate-900">Agenda do Dia</h3>
-                  <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-bold rounded-full">Hoje</span>
+                  <h3 className="text-xl font-bold text-slate-900">
+                    {viewTab === 'active' ? 'Agenda do Dia' : 'Histórico de Atendimentos'}
+                  </h3>
+                  <div className="flex bg-slate-100 p-1 rounded-xl">
+                    <button 
+                      onClick={() => setViewTab('active')}
+                      className={cn(
+                        "px-4 py-1.5 rounded-lg text-xs font-bold transition-all",
+                        viewTab === 'active' ? "bg-white text-emerald shadow-sm" : "text-slate-500 hover:text-slate-700"
+                      )}
+                    >
+                      Agendados
+                    </button>
+                    <button 
+                      onClick={() => setViewTab('history')}
+                      className={cn(
+                        "px-4 py-1.5 rounded-lg text-xs font-bold transition-all",
+                        viewTab === 'history' ? "bg-white text-emerald shadow-sm" : "text-slate-500 hover:text-slate-700"
+                      )}
+                    >
+                      Histórico
+                    </button>
+                  </div>
                 </div>
                 <div className="relative max-w-xs w-full">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -491,7 +533,7 @@ export default function Scheduling() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredAppointments.length > 0 ? filteredAppointments.map((app) => (
+                    {filteredAppointments.map((app) => (
                       <tr key={app.id} className="hover:bg-slate-50 transition-colors group">
                         <td className="px-6 py-4">
                           <div className="flex flex-col gap-1">
@@ -562,7 +604,7 @@ export default function Scheduling() {
                                   e.preventDefault();
                                   e.stopPropagation();
                                   
-                                  if (!window.confirm('Tem certeza que deseja cancelar este agendamento?')) return;
+                                  if (!window.confirm('Tem certeza que deseja cancelar definitivamente este agendamento?')) return;
                                   
                                   const { error } = await supabase
                                     .from('appointments')
@@ -573,7 +615,8 @@ export default function Scheduling() {
                                     console.error('Error cancelling appointment:', error);
                                     alert('Erro ao cancelar agendamento: ' + error.message);
                                   } else {
-                                    fetchData();
+                                    alert('Agendamento cancelado com sucesso.');
+                                    await fetchData();
                                   }
                                 }}
                                 className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-600 transition-colors" 
@@ -585,15 +628,21 @@ export default function Scheduling() {
                           </div>
                         </td>
                       </tr>
-                    )) : (
-                      <tr>
-                        <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
-                          Nenhuma consulta agendada.
-                        </td>
-                      </tr>
-                    )}
+                    ))}
                   </tbody>
                 </table>
+                {filteredAppointments.length === 0 && (
+                  <div className="px-6 py-12 text-center">
+                    <div className="p-4 bg-slate-50 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                      {viewTab === 'active' ? <Calendar className="w-8 h-8 text-slate-300" /> : <History className="w-8 h-8 text-slate-300" />}
+                    </div>
+                    <p className="text-slate-400 font-medium">
+                      {viewTab === 'active' 
+                        ? 'Nenhuma consulta agendada para hoje.' 
+                        : 'O histórico de atendimentos está vazio.'}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

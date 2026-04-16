@@ -99,6 +99,21 @@ export default function Finance() {
   const totalIncome = records.filter(r => r.type === 'income').reduce((acc, r) => acc + Number(r.amount), 0);
   const totalExpense = records.filter(r => r.type === 'expense').reduce((acc, r) => acc + Number(r.amount), 0);
 
+  const [isPriceListOpen, setIsPriceListOpen] = React.useState(false);
+
+  const handlePrintCashReport = () => {
+    alert('Relatório de Caixa Gerado:\nEntradas: ' + totalIncome.toLocaleString() + ' Kz\nSaídas: ' + totalExpense.toLocaleString() + ' Kz\nSaldo: ' + (totalIncome - totalExpense).toLocaleString() + ' Kz');
+    window.print();
+  };
+
+  const handleDownloadPDF = (record: any) => {
+    alert(`Iniciando download da Fatura Nº FAT-${record.id.slice(0, 8).toUpperCase()}...`);
+    // Simulate PDF download by triggering a print for the specific record
+    setTimeout(() => {
+      window.print();
+    }, 500);
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex items-end justify-between">
@@ -107,7 +122,10 @@ export default function Finance() {
           <p className="text-slate-500 mt-1">Controle de faturação, convênios e tesouraria.</p>
         </div>
         <div className="flex gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all">
+          <button 
+            onClick={handlePrintCashReport}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all"
+          >
             <Download className="w-4 h-4" />
             Relatório de Caixa
           </button>
@@ -344,14 +362,14 @@ export default function Finance() {
                   </div>
 
                   <div className="flex gap-3">
-                    <button 
-                      onClick={() => window.print()}
-                      className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-200 transition-all"
-                    >
+                    <button className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-200 transition-all" onClick={() => window.print()}>
                       <Printer className="w-5 h-5" />
                       Imprimir
                     </button>
-                    <button className="flex-1 py-4 bg-navy text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-navy/90 transition-all">
+                    <button 
+                      onClick={() => handleDownloadPDF(selectedRecord)}
+                      className="flex-1 py-4 bg-navy text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-navy/90 transition-all"
+                    >
                       <Download className="w-5 h-5" />
                       Baixar PDF
                     </button>
@@ -389,7 +407,10 @@ export default function Finance() {
               </div>
 
               <div className="mt-8 pt-8 border-t border-slate-100">
-                <button className="w-full flex items-center justify-between p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-all group">
+                <button 
+                  onClick={() => setIsPriceListOpen(true)}
+                  className="w-full flex items-center justify-between p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-all group"
+                >
                   <div className="flex items-center gap-3">
                     <FileText className="w-5 h-5 text-slate-400 group-hover:text-navy transition-colors" />
                     <span className="text-sm font-bold text-slate-700">Tabela de Preços</span>
@@ -398,6 +419,57 @@ export default function Finance() {
                 </button>
               </div>
             </div>
+
+            <Modal
+              isOpen={isPriceListOpen}
+              onClose={() => setIsPriceListOpen(false)}
+              title="Tabela de Preços Hospitalares"
+            >
+              <div className="space-y-4">
+                <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100">
+                  <p className="text-xs text-blue-600 font-medium">Os preços podem variar conforme convênio ou particular.</p>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {[
+                    { item: 'Consulta Geral', price: '5.000 Kz' },
+                    { label: 'Urgência', items: [
+                      { item: 'Consulta Urgente', price: '7.500 Kz' },
+                      { item: 'Sutura Pequena', price: '3.000 Kz' },
+                    ]},
+                    { label: 'Exames', items: [
+                      { item: 'Hemograma', price: '4.500 Kz' },
+                      { item: 'Teste Malária', price: '2.000 Kz' },
+                      { item: 'Glicémia', price: '1.500 Kz' },
+                    ]},
+                    { label: 'Hospedagem', items: [
+                      { item: 'Diária Quarto Comum', price: '10.000 Kz' },
+                      { item: 'Diária Semi-Privado', price: '25.000 Kz' },
+                    ]}
+                  ].map((cat: any, i) => (
+                    <div key={i} className="py-3">
+                      {cat.label ? (
+                        <>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">{cat.label}</p>
+                          <div className="space-y-2">
+                            {cat.items.map((it: any, j: number) => (
+                              <div key={j} className="flex justify-between text-sm">
+                                <span className="text-slate-600">{it.item}</span>
+                                <span className="font-bold text-slate-900">{it.price}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-600 font-bold">{cat.item}</span>
+                          <span className="font-bold text-emerald">{cat.price}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Modal>
           </div>
         </>
       )}

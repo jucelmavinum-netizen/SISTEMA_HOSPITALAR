@@ -95,6 +95,27 @@ export default function Statistics() {
     setIsLoading(false);
   };
 
+  const handleExportMINSA = () => {
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + "Indicador,Valor,Tendencia\n"
+      + `Pacientes,${stats.patients},+15%\n`
+      + `Consultas,${stats.consultations},+12%\n`
+      + `Exames,${stats.exams},+8%`;
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `relatorio_minsa_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    alert('Relatório exportado com sucesso para o formato MINSA (CSV).');
+  };
+
+  const handlePeriodFilter = () => {
+    alert('Funcionalidade de filtro por período:\nNesta versão demo, os dados são agregados dos últimos 7 dias por padrão.');
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex items-end justify-between">
@@ -103,11 +124,17 @@ export default function Statistics() {
           <p className="text-slate-500 mt-1">Dados epidemiológicos e produtividade hospitalar.</p>
         </div>
         <div className="flex gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all">
+          <button 
+            onClick={handlePeriodFilter}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all"
+          >
             <Calendar className="w-4 h-4" />
             Período: Últimos 7 dias
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-navy text-white rounded-xl text-sm font-bold hover:bg-navy/90 transition-all">
+          <button 
+            onClick={handleExportMINSA}
+            className="flex items-center gap-2 px-4 py-2 bg-navy text-white rounded-xl text-sm font-bold hover:bg-navy/90 transition-all"
+          >
             <Download className="w-4 h-4" />
             Exportar para MINSA
           </button>

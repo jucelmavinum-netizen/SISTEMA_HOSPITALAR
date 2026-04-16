@@ -91,6 +91,24 @@ export default function HumanResources() {
 
   const staffOnDuty = staff.slice(0, 4); // Simulated duty for now
 
+  const handleActionClick = (s: any) => {
+    alert(`Detalhes de ${s.full_name}:\nCargo: ${s.role}\nHospital: ${s.hospital_name || 'Hospital Geral'}\nEntrada: 08:00\nStatus: Presente`);
+  };
+
+  const handleDeleteStaff = async (id: string, name: string) => {
+    if (!window.confirm(`Tem certeza que deseja remover ${name} do quadro de pessoal?`)) return;
+    
+    try {
+      const { error } = await supabase.from('profiles').delete().eq('id', id);
+      if (error) throw error;
+      alert('Funcionário removido com sucesso.');
+      fetchStaff();
+    } catch (error) {
+      console.error('Error deleting staff:', error);
+      alert('Erro ao remover funcionário.');
+    }
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex items-end justify-between">
@@ -282,9 +300,22 @@ export default function HumanResources() {
                       </td>
                       <td className="px-6 py-4 text-xs text-slate-400 font-medium">08:00</td>
                       <td className="px-6 py-4 text-right">
-                        <button className="p-2 hover:bg-white rounded-lg text-slate-400">
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                          <button 
+                            onClick={() => handleActionClick(s)}
+                            className="p-2 hover:bg-white rounded-lg text-slate-400 hover:text-navy transition-colors"
+                            title="Ver Detalhes"
+                          >
+                            <UserCheck className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteStaff(s.id, s.full_name)}
+                            className="p-2 hover:bg-white rounded-lg text-slate-400 hover:text-red-600 transition-colors"
+                            title="Remover"
+                          >
+                            <UserX className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

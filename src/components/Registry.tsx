@@ -103,6 +103,41 @@ export default function Registry() {
     }
   };
 
+  const handlePrint = () => {
+    const printContent = document.getElementById('digital-card');
+    if (!printContent) return;
+    
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Cartão do Paciente - SISA ERP</title>
+          <script src="https://cdn.tailwindcss.com"></script>
+        </head>
+        <body class="p-8 flex items-center justify-center min-h-screen">
+          <div class="w-[500px]">
+            ${printContent.innerHTML}
+          </div>
+          <script>
+            window.onload = () => {
+              window.print();
+              setTimeout(() => { window.close(); }, 500);
+            }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  const handleDownload = () => {
+    // In a real app we might use html2canvas or similar
+    // For now, let's trigger a print which usually allows "Save as PDF"
+    handlePrint();
+  };
+
   return (
     <div className="max-w-5xl mx-auto space-y-8">
       <div className="text-center space-y-2">
@@ -216,7 +251,7 @@ export default function Registry() {
             title="Cartão Digital do Paciente"
           >
             <div className="space-y-6">
-              <div className="relative bg-gradient-to-br from-navy to-slate-800 p-8 rounded-3xl text-white overflow-hidden shadow-2xl">
+              <div id="digital-card" className="relative bg-gradient-to-br from-navy to-slate-800 p-8 rounded-3xl text-white overflow-hidden shadow-2xl">
                 {/* Decorative Elements */}
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl" />
                 <div className="absolute bottom-0 left-0 w-24 h-24 bg-emerald/10 rounded-full -ml-12 -mb-12 blur-xl" />
@@ -268,13 +303,16 @@ export default function Registry() {
 
               <div className="flex gap-3">
                 <button 
-                  onClick={() => window.print()}
+                  onClick={handlePrint}
                   className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-200 transition-all"
                 >
                   <Printer className="w-5 h-5" />
                   Imprimir Cartão
                 </button>
-                <button className="flex-1 py-4 bg-navy text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-navy/90 transition-all">
+                <button 
+                  onClick={handleDownload}
+                  className="flex-1 py-4 bg-navy text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-navy/90 transition-all"
+                >
                   <Download className="w-5 h-5" />
                   Baixar PDF
                 </button>

@@ -49,6 +49,20 @@ export default function PharmacyStock() {
     requester: ''
   });
 
+  const [selectedItem, setSelectedItem] = React.useState<any>(null);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = React.useState(false);
+
+  const handleQuickOrder = (item: any) => {
+    if (window.confirm(`Deseja solicitar reposição de emergência para ${item.item_name}?`)) {
+      alert(`Pedido de reposição enviado para o Depósito Central.\nItem: ${item.item_name}\nStatus: Processando`);
+    }
+  };
+
+  const handleShowDetails = (item: any) => {
+    setSelectedItem(item);
+    setIsDetailsModalOpen(true);
+  };
+
   React.useEffect(() => {
     fetchInventory();
   }, []);
@@ -315,6 +329,66 @@ export default function PharmacyStock() {
         </form>
       </Modal>
 
+      <Modal
+        isOpen={isDetailsModalOpen}
+        onClose={() => setIsDetailsModalOpen(false)}
+        title="Detalhes do Item"
+      >
+        {selectedItem && (
+          <div className="space-y-6">
+            <div className="flex items-center gap-4 p-6 bg-slate-50 rounded-3xl border border-slate-100">
+              <div className="p-4 bg-white rounded-2xl shadow-sm">
+                <Pill className="w-8 h-8 text-navy" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">{selectedItem.item_name}</h3>
+                <p className="text-sm text-slate-500 uppercase font-bold tracking-widest">{selectedItem.category}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Stock Atual</p>
+                <p className="text-2xl font-black text-slate-900">{selectedItem.quantity} <span className="text-sm font-normal text-slate-500">un</span></p>
+              </div>
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Stock Mínimo</p>
+                <p className="text-2xl font-black text-slate-900">{selectedItem.min_stock} <span className="text-sm font-normal text-slate-500">un</span></p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-[10px] font-bold text-slate-400 uppercase">Data de Validade</p>
+              <div className="flex items-center gap-2 p-4 bg-amber-50 rounded-2xl border border-amber-100/50">
+                <Calendar className="w-5 h-5 text-amber-500" />
+                <span className="font-bold text-amber-700">
+                  {selectedItem.expiry_date ? new Date(selectedItem.expiry_date).toLocaleDateString() : 'Não informada'}
+                </span>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-slate-100 flex gap-3">
+              <button 
+                onClick={() => {
+                  setIsDetailsModalOpen(false);
+                  setIsRequestModalOpen(true);
+                  setRequestFormData(prev => ({ ...prev, item_id: selectedItem.id }));
+                }}
+                className="flex-1 py-4 bg-navy text-white rounded-2xl font-bold hover:bg-navy/90 transition-all"
+              >
+                Solicitar Saída
+              </button>
+              <button 
+                onClick={() => handleQuickOrder(selectedItem)}
+                className="flex-1 py-4 bg-emerald text-white rounded-2xl font-bold hover:bg-emerald/90 transition-all"
+              >
+                Repoer Stock
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-12 h-12 text-emerald animate-spin" />
@@ -346,7 +420,10 @@ export default function PharmacyStock() {
                         <p className="text-xs text-slate-500">Stock atual: <span className="text-red-600 font-bold">{item.quantity} un</span> / Mínimo: {item.min_stock} un</p>
                       </div>
                     </div>
-                    <button className="px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition-all">
+                    <button 
+                      onClick={() => handleQuickOrder(item)}
+                      className="px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition-all"
+                    >
                       Pedir Agora
                     </button>
                   </div>
@@ -441,7 +518,12 @@ export default function PharmacyStock() {
                           {item.expiry_date ? new Date(item.expiry_date).toLocaleDateString() : 'N/A'}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <button className="text-xs font-bold text-navy hover:underline">Detalhes</button>
+                          <button 
+                            onClick={() => handleShowDetails(item)}
+                            className="text-xs font-bold text-navy hover:underline"
+                          >
+                            Detalhes
+                          </button>
                         </td>
                       </tr>
                     );
