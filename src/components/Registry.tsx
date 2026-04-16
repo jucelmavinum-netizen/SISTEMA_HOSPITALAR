@@ -27,6 +27,44 @@ export default function Registry() {
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [isCardModalOpen, setIsCardModalOpen] = React.useState(false);
+  const [tempPatient, setTempPatient] = React.useState({
+    fullName: '',
+    gender: 'M',
+    estimatedAge: ''
+  });
+  const [isCreatingTemp, setIsCreatingTemp] = React.useState(false);
+
+  const handleTempIdSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tempPatient.fullName) return;
+    setIsCreatingTemp(true);
+
+    try {
+      const processNumber = 'TEMP-' + Math.floor(100000 + Math.random() * 900000);
+      const { data, error } = await supabase
+        .from('patients')
+        .insert([{
+          full_name: tempPatient.fullName,
+          gender: tempPatient.gender,
+          process_number: processNumber,
+          province: 'Luanda',
+          municipality: 'Luanda',
+          district: 'Desconhecido',
+          financing_type: 'public'
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      setPatient(data);
+      setTempPatient({ fullName: '', gender: 'M', estimatedAge: '' });
+      alert(`ID Temporário Gerado: ${processNumber}. Proceda para a Triagem.`);
+    } catch (err: any) {
+      setError('Erro ao gerar ID temporário: ' + err.message);
+    } finally {
+      setIsCreatingTemp(false);
+    }
+  };
 
   const handleSearch = async () => {
     if (!searchTerm) return;
@@ -308,25 +346,46 @@ export default function Registry() {
             </div>
           </div>
 
-          <form className="grid grid-cols-2 gap-4">
+          <form onSubmit={handleTempIdSubmit} className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
               <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Nome Completo (ou Descrição)</label>
-              <input type="text" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald" placeholder="Ex: Desconhecido - Trauma Estrada" />
+              <input 
+                type="text" 
+                required
+                value={tempPatient.fullName}
+                onChange={(e) => setTempPatient({ ...tempPatient, fullName: e.target.value })}
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald" 
+                placeholder="Ex: Desconhecido - Trauma Estrada" 
+              />
             </div>
             <div>
               <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Gênero Estimado</label>
-              <select className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald">
-                <option>Masculino</option>
-                <option>Feminino</option>
-                <option>Não Identificado</option>
+              <select 
+                value={tempPatient.gender}
+                onChange={(e) => setTempPatient({ ...tempPatient, gender: e.target.value })}
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
+              >
+                <option value="M">Masculino</option>
+                <option value="F">Feminino</option>
+                <option value="O">Não Identificado</option>
               </select>
             </div>
             <div>
               <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Idade Estimada</label>
-              <input type="number" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald" placeholder="Ex: 25" />
+              <input 
+                type="number" 
+                value={tempPatient.estimatedAge}
+                onChange={(e) => setTempPatient({ ...tempPatient, estimatedAge: e.target.value })}
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald" 
+                placeholder="Ex: 25" 
+              />
             </div>
-            <button className="col-span-2 mt-4 bg-navy text-white py-4 rounded-2xl font-bold hover:bg-navy/90 transition-all flex items-center justify-center gap-2">
-              <Download className="w-5 h-5" />
+            <button 
+              type="submit"
+              disabled={isCreatingTemp}
+              className="col-span-2 mt-4 bg-navy text-white py-4 rounded-2xl font-bold hover:bg-navy/90 transition-all flex items-center justify-center gap-2 disabled:opacity-70"
+            >
+              {isCreatingTemp ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
               Gerar ID Temporário e Iniciar Triagem
             </button>
           </form>

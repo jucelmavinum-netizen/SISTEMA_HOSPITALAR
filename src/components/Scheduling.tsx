@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-  Calendar as CalendarIcon, 
+  Calendar, 
   Clock, 
   Search, 
   Plus, 
@@ -12,7 +12,8 @@ import {
   CalendarDays,
   Stethoscope,
   ClipboardList,
-  CheckCircle2
+  CheckCircle2,
+  X
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -135,8 +136,10 @@ export default function Scheduling() {
       const { error: consError } = await supabase
         .from('consultations')
         .insert([{
+          appointment_id: selectedAppointment.id,
           patient_id: selectedAppointment.patient_id,
           doctor_id: selectedAppointment.doctor_id,
+          triage_id: triageData?.id || null,
           symptoms: consultationData.symptoms,
           diagnosis: consultationData.diagnosis,
           prescription: consultationData.prescription,
@@ -153,6 +156,7 @@ export default function Scheduling() {
 
       if (appError) throw appError;
 
+      alert('Atendimento finalizado com sucesso!');
       setIsConsultationModalOpen(false);
       setSelectedAppointment(null);
       setConsultationData({
@@ -171,8 +175,10 @@ export default function Scheduling() {
   };
 
   const filteredAppointments = appointments.filter(app => 
-    app.patients?.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    app.profiles?.full_name.toLowerCase().includes(searchTerm.toLowerCase())
+    app.status === 'scheduled' && (
+      (app.patients?.full_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (app.profiles?.full_name || '').toLowerCase().includes(searchTerm.toLowerCase())
+    )
   );
 
   return (
@@ -477,7 +483,7 @@ export default function Scheduling() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-50 text-slate-400 text-[10px] font-bold uppercase tracking-widest">
-                      <th className="px-6 py-4">Horário</th>
+                      <th className="px-6 py-4">Data/Hora</th>
                       <th className="px-6 py-4">Paciente</th>
                       <th className="px-6 py-4">Médico</th>
                       <th className="px-6 py-4">Status</th>
@@ -488,9 +494,15 @@ export default function Scheduling() {
                     {filteredAppointments.length > 0 ? filteredAppointments.map((app) => (
                       <tr key={app.id} className="hover:bg-slate-50 transition-colors group">
                         <td className="px-6 py-4">
-                          <div className="flex items-center gap-2 text-slate-900 font-bold">
-                            <Clock className="w-4 h-4 text-slate-300" />
-                            {new Date(app.appointment_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2 text-slate-900 font-bold">
+                              <Calendar className="w-4 h-4 text-slate-300" />
+                              {new Date(app.appointment_date).toLocaleDateString()}
+                            </div>
+                            <div className="flex items-center gap-2 text-slate-500 text-xs">
+                              <Clock className="w-4 h-4 text-slate-300" />
+                              {new Date(app.appointment_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </div>
                           </div>
                         </td>
                         <td className="px-6 py-4">
@@ -544,9 +556,32 @@ export default function Scheduling() {
                                 Atender
                               </button>
                             )}
-                            <button className="p-2 hover:bg-white rounded-lg text-slate-400">
-                              <MoreVertical className="w-4 h-4" />
-                            </button>
+                            {app.status === 'scheduled' && (
+                              <button 
+                                onClick={async (e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  
+                                  if (!window.confirm('Tem certeza que deseja cancelar este agendamento?')) return;
+                                  
+                                  const { error } = await supabase
+                                    .from('appointments')
+                                    .update({ status: 'cancelled' })
+                                    .eq('id', app.id);
+                                    
+                                  if (error) {
+                                    console.error('Error cancelling appointment:', error);
+                                    alert('Erro ao cancelar agendamento: ' + error.message);
+                                  } else {
+                                    fetchData();
+                                  }
+                                }}
+                                className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-600 transition-colors" 
+                                title="Cancelar Agendamento"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
