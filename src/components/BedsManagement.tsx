@@ -72,14 +72,23 @@ export default function BedsManagement() {
       setBeds(data);
     } else {
       // Seed some demo beds if table is empty
-      setBeds([
+      const initialBeds = [
         { id: 'PED-01', ward: 'Pediatria', status: 'available', last_updated: new Date().toISOString() },
         { id: 'PED-02', ward: 'Pediatria', status: 'available', last_updated: new Date().toISOString() },
         { id: 'MAT-01', ward: 'Maternidade', status: 'available', last_updated: new Date().toISOString() },
-        { id: 'MAT-02', ward: 'Maternidade', status: 'occupied', last_updated: new Date().toISOString(), patient_id: 'sample' },
+        { id: 'MAT-02', ward: 'Maternidade', status: 'available', last_updated: new Date().toISOString() },
         { id: 'CIR-01', ward: 'Cirurgia', status: 'available', last_updated: new Date().toISOString() },
         { id: 'URG-01', ward: 'Urgência', status: 'available', last_updated: new Date().toISOString() },
-      ]);
+      ];
+      
+      // Try to insert them into DB
+      const { error: insertError } = await supabase.from('beds').insert(initialBeds);
+      if (!insertError) {
+        const { data: newData } = await supabase.from('beds').select('*, patients(full_name, process_number)').order('id');
+        if (newData) setBeds(newData);
+      } else {
+        setBeds(initialBeds);
+      }
     }
     setIsLoading(false);
   };
@@ -100,6 +109,7 @@ export default function BedsManagement() {
 
       if (error) throw error;
 
+      alert('Internamento realizado com sucesso!');
       setIsModalOpen(false);
       setFormData({
         patient_id: '',

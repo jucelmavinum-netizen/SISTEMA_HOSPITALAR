@@ -43,6 +43,11 @@ export default function Scheduling() {
 
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
 
+  const [selectedDate, setSelectedDate] = React.useState(new Date().toISOString().split('T')[0]);
+  const [currentCalendarMonth, setCurrentCalendarMonth] = React.useState(new Date());
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
+  const [appointmentToDelete, setAppointmentToDelete] = React.useState<any>(null);
+
   const [formData, setFormData] = React.useState({
     patient_id: '',
     doctor_id: '',
@@ -231,16 +236,61 @@ export default function Scheduling() {
     }
   };
 
+  const handleConfirmDelete = async () => {
+    if (!appointmentToDelete) return;
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .delete()
+        .eq('id', appointmentToDelete.id);
+      
+      if (error) throw error;
+      
+      alert('Agendamento removido com sucesso.');
+      setIsDeleteModalOpen(false);
+      setAppointmentToDelete(null);
+      await fetchData();
+    } catch (error: any) {
+      console.error('Error deleting appointment:', error);
+      alert('Erro ao excluir agendamento: ' + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const days = new Date(year, month + 1, 0).getDate();
+    return { firstDay, days };
+  };
+
+  const { firstDay, days } = getDaysInMonth(currentCalendarMonth);
+  const calendarDays = Array.from({ length: 42 }).map((_, i) => {
+    const day = i - firstDay + 1;
+    if (day > 0 && day <= days) {
+      const d = new Date(currentCalendarMonth.getFullYear(), currentCalendarMonth.getMonth(), day);
+      return d.toISOString().split('T')[0];
+    }
+    return null;
+  });
+
+  const months = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
   const filteredAppointments = appointments.filter(app => {
     const matchesSearch = (
       (app.patients?.full_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (app.profiles?.full_name || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
     
+    const matchesDate = !selectedDate || app.appointment_date === selectedDate;
+    
     if (viewTab === 'active') {
-      return app.status === 'scheduled' && matchesSearch;
+      return app.status === 'scheduled' && matchesSearch && matchesDate;
     } else {
-      return (app.status === 'completed' || app.status === 'cancelled') && matchesSearch;
+      return (app.status === 'completed' || app.status === 'cancelled') && matchesSearch && matchesDate;
     }
   });
 
@@ -468,6 +518,43 @@ export default function Scheduling() {
       </Modal>
 
       <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title="Confirmar Exclusão"
+      >
+        <div className="space-y-6">
+          <div className="p-6 bg-red-50 rounded-3xl border border-red-100 flex flex-col items-center text-center gap-4">
+            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm">
+              <X className="w-8 h-8 text-red-500" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-slate-900">Remover Agendamento?</h3>
+              <p className="text-sm text-slate-500 mt-1">
+                Esta ação é irreversível e removerá permanentemente o agendamento de <strong>{appointmentToDelete?.patients?.full_name}</strong> do sistema.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button 
+              onClick={() => setIsDeleteModalOpen(false)}
+              className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all"
+            >
+              Cancelar
+            </button>
+            <button 
+              onClick={handleConfirmDelete}
+              disabled={isSubmitting}
+              className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-200 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
+              Sim, Excluir
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title="Marcar Nova Consulta"
@@ -571,28 +658,58 @@ export default function Scheduling() {
           <div className="lg:col-span-1 space-y-6">
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="font-bold text-slate-900">Abril 2024</h3>
+                <h3 className="font-bold text-slate-900">
+                  {months[currentCalendarMonth.getMonth()]} {currentCalendarMonth.getFullYear()}
+                </h3>
                 <div className="flex gap-1">
-                  <button className="p-1 hover:bg-slate-100 rounded-lg"><ChevronLeft className="w-4 h-4" /></button>
-                  <button className="p-1 hover:bg-slate-100 rounded-lg"><ChevronRight className="w-4 h-4" /></button>
+                  <button 
+                    onClick={() => setCurrentCalendarMonth(new Date(currentCalendarMonth.setMonth(currentCalendarMonth.getMonth() - 1)))}
+                    className="p-1 hover:bg-slate-100 rounded-lg text-slate-400"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => setCurrentCalendarMonth(new Date(currentCalendarMonth.setMonth(currentCalendarMonth.getMonth() + 1)))}
+                    className="p-1 hover:bg-slate-100 rounded-lg text-slate-400"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
               <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400 uppercase mb-2">
                 <span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span>
               </div>
               <div className="grid grid-cols-7 gap-1 text-center">
-                {Array.from({ length: 30 }).map((_, i) => (
-                  <button 
-                    key={i} 
-                    className={cn(
-                      "h-8 w-8 flex items-center justify-center rounded-lg text-sm font-medium transition-all",
-                      i + 1 === 12 ? "bg-navy text-white font-bold" : "hover:bg-slate-50 text-slate-600"
-                    )}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
+                {calendarDays.map((dateStr, i) => {
+                  if (!dateStr) return <div key={i} className="h-8 w-8" />;
+                  const day = parseInt(dateStr.split('-')[2]);
+                  const isSelected = selectedDate === dateStr;
+                  const isToday = new Date().toISOString().split('T')[0] === dateStr;
+                  
+                  return (
+                    <button 
+                      key={i} 
+                      onClick={() => setSelectedDate(dateStr)}
+                      className={cn(
+                        "h-8 w-8 flex items-center justify-center rounded-lg text-sm font-medium transition-all",
+                        isSelected ? "bg-navy text-white font-bold" : 
+                        isToday ? "text-emerald font-bold border border-emerald/20" :
+                        "hover:bg-slate-50 text-slate-600"
+                      )}
+                    >
+                      {day}
+                    </button>
+                  );
+                })}
               </div>
+              {selectedDate && (
+                <button 
+                  onClick={() => setSelectedDate('')}
+                  className="w-full mt-4 py-2 text-[10px] font-bold text-slate-400 uppercase hover:text-navy transition-colors border-t border-slate-100 pt-4"
+                >
+                  Ver Todos os Dias
+                </button>
+              )}
             </div>
 
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
@@ -758,24 +875,8 @@ export default function Scheduling() {
                                   onClick={async (e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    
-                                    const confirmed = confirm('Deseja realmente remover este agendamento do sistema?');
-                                    if (!confirmed) return;
-
-                                    try {
-                                      const { error } = await supabase
-                                        .from('appointments')
-                                        .delete()
-                                        .eq('id', app.id);
-                                        
-                                      if (error) throw error;
-                                      
-                                      alert('Agendamento removido com sucesso.');
-                                      await fetchData();
-                                    } catch (error: any) {
-                                      console.error('Error deleting appointment:', error);
-                                      alert('Erro ao excluir agendamento: ' + error.message);
-                                    }
+                                    setAppointmentToDelete(app);
+                                    setIsDeleteModalOpen(true);
                                   }}
                                   className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-600 transition-colors" 
                                   title="Excluir Agendamento"

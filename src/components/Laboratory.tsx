@@ -88,6 +88,12 @@ export default function Laboratory() {
     setIsSubmitting(true);
 
     try {
+      if (!formData.patient_id || !formData.exam_type || !formData.requester_id) {
+        alert('Por favor, preencha todos os campos obrigatórios (Paciente, Exame e Médico).');
+        setIsSubmitting(false);
+        return;
+      }
+
       const { error } = await supabase
         .from('exams')
         .insert([{
@@ -95,11 +101,13 @@ export default function Laboratory() {
           exam_type: formData.exam_type,
           requester_id: formData.requester_id,
           status: 'pending',
-          notes: formData.notes
+          priority: formData.priority,
+          notes: formData.notes || ''
         }]);
 
       if (error) throw error;
 
+      alert('Exame solicitado com sucesso!');
       setIsModalOpen(false);
       setFormData({
         patient_id: '',
@@ -109,9 +117,9 @@ export default function Laboratory() {
         notes: ''
       });
       fetchExams();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating exam:', error);
-      alert('Erro ao solicitar exame. Por favor, tente novamente.');
+      alert('Erro ao solicitar exame: ' + (error.message || 'Erro desconhecido. Verifique se a tabela "exams" existe no banco.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -149,6 +157,7 @@ export default function Laboratory() {
 
       if (error) throw error;
 
+      alert('Resultado do exame liberado com sucesso!');
       setIsResultModalOpen(false);
       setResultData({ result: '', technician_notes: '' });
       fetchExams();
@@ -227,6 +236,27 @@ export default function Laboratory() {
                 <option key={d.id} value={d.id}>{d.full_name}</option>
               ))}
             </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase">Prioridade</label>
+            <div className="flex gap-4">
+              {['normal', 'urgent'].map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, priority: p }))}
+                  className={cn(
+                    "flex-1 py-3 rounded-xl font-bold transition-all border-2 text-xs uppercase",
+                    formData.priority === p 
+                      ? "border-amber-500 bg-amber-50 text-amber-700" 
+                      : "border-slate-100 text-slate-500 hover:border-slate-200"
+                  )}
+                >
+                  {p === 'normal' ? 'Normal' : 'Urgente'}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="space-y-2">

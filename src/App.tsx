@@ -128,7 +128,7 @@ export default function App() {
 
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard user={user} />;
+        return <Dashboard user={user} setActiveTab={setActiveTab} />;
       case 'admission':
         return <PatientAdmission />;
       case 'registry':
@@ -152,7 +152,7 @@ export default function App() {
       case 'finance':
         return <Finance />;
       default:
-        return <Dashboard user={user} />;
+        return <Dashboard user={user} setActiveTab={setActiveTab} />;
     }
   };
 

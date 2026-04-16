@@ -29,6 +29,8 @@ import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 import React from 'react';
+import Modal from './ui/Modal';
+import { CheckCircle2, X } from 'lucide-react';
 
 const waitTimeData = [
   { sector: 'Triagem', time: 15, capacity: 45 },
@@ -44,9 +46,10 @@ interface DashboardProps {
     role: string;
     hospital_name?: string;
   };
+  setActiveTab: (tab: string) => void;
 }
 
-export default function Dashboard({ user }: DashboardProps) {
+export default function Dashboard({ user, setActiveTab }: DashboardProps) {
   const [stats, setStats] = React.useState({
     patientCount: 0,
     staffCount: 0,
@@ -56,9 +59,13 @@ export default function Dashboard({ user }: DashboardProps) {
     monthlyRevenue: 0,
     doctorAppointments: [] as any[],
     pendingExams: 0,
-    inpatientCount: 0
+    inpatientCount: 0,
+    criticalExams: [] as any[],
+    pendingDischarges: [] as any[]
   });
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isAlertModalOpen, setIsAlertModalOpen] = React.useState(false);
+  const [alertType, setAlertType] = React.useState<'critical' | 'discharge' | null>(null);
 
   React.useEffect(() => {
     const fetchDashboardData = async () => {
@@ -105,7 +112,18 @@ export default function Dashboard({ user }: DashboardProps) {
           .order('created_at', { ascending: false })
           .limit(5);
 
-        // 6. Doctor Specific Data
+        // 6. Alertas e Dados Específicos
+        const { data: criticalExams } = await supabase
+          .from('exams')
+          .select('*, patients(full_name)')
+          .eq('status', 'pending')
+          .limit(10); // Mocking critical for now or use a 'result' check if schema allows
+
+        const { data: occupiedBeds } = await supabase
+          .from('beds')
+          .select('*, patients(full_name)')
+          .eq('status', 'occupied');
+
         if (user.role === 'doctor') {
           const { data: docApps } = await supabase
             .from('appointments')
@@ -152,7 +170,9 @@ export default function Dashboard({ user }: DashboardProps) {
           criticalStock: cStock,
           triageStats: formattedTriage,
           recentPatients: recent || [],
-          monthlyRevenue
+          monthlyRevenue,
+          criticalExams: criticalExams || [],
+          pendingDischarges: occupiedBeds || []
         }));
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
@@ -227,7 +247,10 @@ export default function Dashboard({ user }: DashboardProps) {
               </div>
             )}
           </div>
-          <button className="w-full mt-6 py-3 text-sm font-bold text-emerald hover:bg-emerald-50 rounded-xl transition-all">
+          <button 
+            onClick={() => setActiveTab('registry')}
+            className="w-full mt-6 py-3 text-sm font-bold text-emerald hover:bg-emerald-50 rounded-xl transition-all"
+          >
             Ver Todos os Registros
           </button>
         </div>
@@ -277,17 +300,75 @@ export default function Dashboard({ user }: DashboardProps) {
         <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
           <h3 className="text-xl font-bold text-slate-900 mb-6">Alertas Clínicos</h3>
           <div className="space-y-4">
-            <div className="p-4 bg-red-50 border border-red-100 rounded-2xl">
-              <p className="text-sm font-bold text-red-700">Resultado Crítico</p>
+            <button 
+              onClick={() => {
+                setAlertType('critical');
+                setIsAlertModalOpen(true);
+              }}
+              className="w-full text-left p-4 bg-red-50 border border-red-100 rounded-2xl hover:bg-red-100 transition-all transition-all group"
+            >
+              <div className="flex justify-between items-center">
+                <p className="text-sm font-bold text-red-700">Resultado Crítico</p>
+                <span className="text-[10px] font-bold bg-red-200 text-red-700 px-2 py-0.5 rounded-full">{stats.criticalExams.length}</span>
+              </div>
               <p className="text-xs text-red-600 mt-1">Verifique os últimos exames laboratoriais pendentes.</p>
-            </div>
-            <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl">
-              <p className="text-sm font-bold text-amber-700">Alta Pendente</p>
+            </button>
+            <button 
+              onClick={() => {
+                setAlertType('discharge');
+                setIsAlertModalOpen(true);
+              }}
+              className="w-full text-left p-4 bg-amber-50 border border-amber-100 rounded-2xl hover:bg-amber-100 transition-all group"
+            >
+              <div className="flex justify-between items-center">
+                <p className="text-sm font-bold text-amber-700">Alta Pendente</p>
+                <span className="text-[10px] font-bold bg-amber-200 text-amber-700 px-2 py-0.5 rounded-full">{stats.pendingDischarges.length}</span>
+              </div>
               <p className="text-xs text-amber-600 mt-1">Existem pacientes aguardando revisão para alta.</p>
-            </div>
+            </button>
           </div>
         </div>
       </div>
+
+      <Modal
+        isOpen={isAlertModalOpen}
+        onClose={() => setIsAlertModalOpen(false)}
+        title={alertType === 'critical' ? 'Resultados Críticos' : 'Pacientes para Alta'}
+      >
+        <div className="space-y-4">
+          {alertType === 'critical' ? (
+            stats.criticalExams.length > 0 ? stats.criticalExams.map((exam, i) => (
+              <div key={i} className="p-4 border border-slate-100 rounded-2xl hover:bg-slate-50 transition-all flex items-center justify-between">
+                <div>
+                  <p className="font-bold text-slate-900">{exam.patients?.full_name}</p>
+                  <p className="text-xs text-slate-500">{exam.exam_type} • Pendente</p>
+                </div>
+                <button 
+                  onClick={() => setActiveTab('laboratory')}
+                  className="px-3 py-1 bg-navy text-white text-[10px] font-bold rounded-lg uppercase"
+                >
+                  Ver Laudo
+                </button>
+              </div>
+            )) : <p className="text-center py-8 text-slate-400">Nenhum resultado crítico pendente.</p>
+          ) : (
+            stats.pendingDischarges.length > 0 ? stats.pendingDischarges.map((bed, i) => (
+              <div key={i} className="p-4 border border-slate-100 rounded-2xl hover:bg-slate-50 transition-all flex items-center justify-between">
+                <div>
+                  <p className="font-bold text-slate-900">{bed.patients?.full_name}</p>
+                  <p className="text-xs text-slate-500">Leito {bed.bed_number} • {bed.ward}</p>
+                </div>
+                <button 
+                  onClick={() => setActiveTab('beds')}
+                  className="px-3 py-1 bg-emerald text-white text-[10px] font-bold rounded-lg uppercase"
+                >
+                  Processar Alta
+                </button>
+              </div>
+            )) : <p className="text-center py-8 text-slate-400">Nenhum paciente aguardando alta.</p>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 

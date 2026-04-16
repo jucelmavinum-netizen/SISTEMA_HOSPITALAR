@@ -112,7 +112,16 @@ export default function Triage() {
           <AlertCircle className="w-6 h-6 text-red-600" />
           <div>
             <p className="text-xs font-bold text-red-600 uppercase">Emergência Crítica?</p>
-            <button className="text-sm font-bold text-red-700 hover:underline flex items-center gap-1">
+            <button 
+              onClick={async () => {
+                if (!patient && searchTerm) {
+                  await handleSearch();
+                }
+                setSelectedColor('red');
+                setNotes('ENCAMINHAMENTO IMEDIATO - EMERGÊNCIA CRÍTICA');
+              }}
+              className="text-sm font-bold text-red-700 hover:underline flex items-center gap-1"
+            >
               Encaminhamento Imediato <Zap className="w-4 h-4 fill-current" />
             </button>
           </div>
