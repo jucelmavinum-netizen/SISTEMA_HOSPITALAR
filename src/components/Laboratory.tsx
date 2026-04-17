@@ -34,6 +34,7 @@ export default function Laboratory() {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [isResultModalOpen, setIsResultModalOpen] = React.useState(false);
+  const [isViewResultModalOpen, setIsViewResultModalOpen] = React.useState(false);
   const [selectedExam, setSelectedExam] = React.useState<any>(null);
   const [resultData, setResultData] = React.useState({
     result: '',
@@ -166,6 +167,31 @@ export default function Laboratory() {
       alert('Erro ao finalizar exame.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDownloadPDF = (exam: any) => {
+    // Basic implementation: Open a printable version or just use window.print
+    // In a real app we'd use a PDF library, but for now we can simulate or use browser print
+    const printContent = `
+      SISA - Hospital ERP
+      RELATÓRIO DE EXAME
+
+      Paciente: ${exam.patients?.full_name}
+      Exame: ${exam.exam_type}
+      Data: ${new Date(exam.created_at).toLocaleString()}
+      Médico Solicitante: ${exam.profiles?.full_name}
+
+      RESULTADO: ${exam.result}
+      
+      NOTAS DO LABORATORISTA:
+      ${exam.notes?.split('\n\nNotas do Técnico: ')[1] || 'Nenhuma observação adicional.'}
+    `;
+    const win = window.open('', '', 'width=600,height=600');
+    if (win) {
+      win.document.write(`<pre>${printContent}</pre>`);
+      win.document.close();
+      win.print();
     }
   };
 
@@ -328,6 +354,61 @@ export default function Laboratory() {
         </form>
       </Modal>
 
+      <Modal
+        isOpen={isViewResultModalOpen}
+        onClose={() => setIsViewResultModalOpen(false)}
+        title="Detalhes do Resultado"
+      >
+        {selectedExam && (
+          <div className="space-y-6">
+            <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Paciente</p>
+                  <p className="text-lg font-bold text-slate-900">{selectedExam.patients?.full_name}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Data do Exame</p>
+                  <p className="text-sm font-medium text-slate-600">{new Date(selectedExam.created_at).toLocaleDateString()}</p>
+                </div>
+              </div>
+              
+              <div className="pt-4 border-t border-slate-200">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tipo de Exame</p>
+                <p className="text-sm font-bold text-navy">{selectedExam.exam_type}</p>
+              </div>
+
+              <div className="pt-4 border-t border-slate-200">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Médico Solicitante</p>
+                <p className="text-sm font-medium text-slate-700">{selectedExam.profiles?.full_name}</p>
+              </div>
+            </div>
+
+            <div className="p-6 bg-emerald-50 border border-emerald-100 rounded-3xl">
+              <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Resultado Final</p>
+              <p className="text-xl font-black text-emerald-700 mt-2">{selectedExam.result}</p>
+            </div>
+
+            {selectedExam.notes && (
+              <div className="p-6 bg-white border border-slate-200 rounded-3xl">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Laudo / Observações</p>
+                <div className="mt-3 text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
+                  {selectedExam.notes}
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => handleDownloadPDF(selectedExam)}
+              className="w-full py-4 bg-navy text-white rounded-2xl font-bold hover:bg-navy/90 transition-all flex items-center justify-center gap-2"
+            >
+              <Download className="w-5 h-5" />
+              Imprimir Relatório Completo
+            </button>
+          </div>
+        )}
+      </Modal>
+
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-12 h-12 text-emerald animate-spin" />
@@ -431,10 +512,21 @@ export default function Laboratory() {
                           )}
                           {exam.status === 'ready' ? (
                             <>
-                              <button className="p-2 hover:bg-white rounded-lg text-emerald hover:shadow-sm transition-all" title="Ver Resultado">
+                              <button 
+                                onClick={() => {
+                                  setSelectedExam(exam);
+                                  setIsViewResultModalOpen(true);
+                                }}
+                                className="p-2 hover:bg-white rounded-lg text-emerald hover:shadow-sm transition-all" 
+                                title="Ver Resultado"
+                              >
                                 <ExternalLink className="w-4 h-4" />
                               </button>
-                              <button className="p-2 hover:bg-white rounded-lg text-slate-400" title="Baixar PDF">
+                              <button 
+                                onClick={() => handleDownloadPDF(exam)}
+                                className="p-2 hover:bg-white rounded-lg text-slate-400" 
+                                title="Baixar PDF"
+                              >
                                 <Download className="w-4 h-4" />
                               </button>
                             </>

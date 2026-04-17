@@ -196,7 +196,7 @@ export default function BedsManagement() {
 
   const filteredBeds = selectedWard === 'all' 
     ? beds 
-    : beds.filter(bed => bed.ward.toLowerCase() === selectedWard.toLowerCase());
+    : beds.filter(bed => bed.ward && bed.ward.toLowerCase() === selectedWard.toLowerCase());
 
   const wards = [
     { id: 'pediatria', name: 'Pediatria' },
@@ -220,10 +220,19 @@ export default function BedsManagement() {
           <p className="text-slate-500 mt-1">Gestão de internamentos e ocupação por enfermaria.</p>
         </div>
         <div className="flex gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all">
-            <Filter className="w-4 h-4" />
-            Filtrar Ala
-          </button>
+          <div className="relative">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <select
+              value={selectedWard}
+              onChange={(e) => setSelectedWard(e.target.value)}
+              className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 outline-none focus:border-emerald transition-all appearance-none cursor-pointer"
+            >
+              <option value="all">Todas as Alas</option>
+              {wards.map(w => (
+                <option key={w.id} value={w.id}>{w.name}</option>
+              ))}
+            </select>
+          </div>
           <button 
             onClick={() => setIsModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-navy text-white rounded-xl text-sm font-bold hover:bg-navy/90 transition-all"

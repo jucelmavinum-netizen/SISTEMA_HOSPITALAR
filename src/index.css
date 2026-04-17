@@ -23,3 +23,34 @@
 .manchester-yellow { @apply bg-manchester-yellow text-slate-900; }
 .manchester-green { @apply bg-manchester-green text-white; }
 .manchester-blue { @apply bg-manchester-blue text-white; }
+
+@media print {
+  /* Hide the base application completely */
+  #root, .no-print {
+    display: none !important;
+    height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* Reset body for printing */
+  body {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Ensure the portal-mounted content is visible and takes full width */
+  .print-only-content {
+    visibility: visible !important;
+    display: block !important;
+    position: relative !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 2cm !important; /* Standard print margin */
+  }
+
+  /* Make sure every parent of print-only-content in the portal is also visible */
+  .print-only-content * {
+    visibility: visible !important;
+  }
+}

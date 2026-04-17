@@ -32,6 +32,26 @@ export default function Triage() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [success, setSuccess] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [triagedPatients, setTriagedPatients] = React.useState<any[]>([]);
+
+  React.useEffect(() => {
+    fetchTriagedPatients();
+  }, [success]);
+
+  const fetchTriagedPatients = async () => {
+    const { data, error } = await supabase
+      .from('triage_records')
+      .select(`
+        *,
+        patients (full_name, process_number)
+      `)
+      .order('created_at', { ascending: false })
+      .limit(10);
+    
+    if (!error && data) {
+      setTriagedPatients(data);
+    }
+  };
 
   const handleSearch = async () => {
     if (!searchTerm) return;
@@ -308,6 +328,63 @@ export default function Triage() {
               </button>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Triaged Patients List */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden mt-8">
+        <div className="p-6 border-b border-slate-100">
+          <h3 className="text-xl font-bold text-slate-900">Pacientes Triados Recentemente</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 text-slate-400 text-[10px] font-bold uppercase tracking-widest">
+                <th className="px-6 py-4">Paciente</th>
+                <th className="px-6 py-4">Classificação</th>
+                <th className="px-6 py-4">Sinais Vitais</th>
+                <th className="px-6 py-4">Data/Hora</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {triagedPatients.length > 0 ? triagedPatients.map((record) => (
+                <tr key={record.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-4">
+                    <p className="text-sm font-bold text-slate-900">{record.patients?.full_name}</p>
+                    <p className="text-[10px] text-slate-400">Proc: {record.patients?.process_number}</p>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={cn(
+                      "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                      record.classification === 'red' ? "bg-red-50 text-red-600" :
+                      record.classification === 'orange' ? "bg-orange-50 text-orange-600" :
+                      record.classification === 'yellow' ? "bg-yellow-50 text-yellow-600" :
+                      record.classification === 'green' ? "bg-green-50 text-green-600" :
+                      "bg-blue-50 text-blue-600"
+                    )}>
+                      {colors.find(c => c.id === record.classification)?.label}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex gap-3 text-[10px] font-medium text-slate-500">
+                      <span>T: {record.vitals?.temp}°C</span>
+                      <span>PA: {record.vitals?.bp}</span>
+                      <span>FC: {record.vitals?.hr}</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-xs text-slate-400">
+                    {new Date(record.created_at).toLocaleString()}
+                  </td>
+                </tr>
+              )) : (
+                <tr>
+                  <td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">
+                    Nenhum registro de triagem encontrado.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

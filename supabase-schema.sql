@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS profiles (
   municipality TEXT,
   specialty TEXT, -- For doctors
   license_number TEXT, -- Professional license
+  shift TEXT, -- Shift/Duty schedule
+  status TEXT DEFAULT 'present', -- present, on-call, absent
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -200,3 +202,18 @@ BEGIN
         CREATE POLICY "Admin can access audit logs" ON audit_logs FOR ALL USING (auth.role() = 'authenticated');
     END IF;
 END $$;
+
+-- 12. Attendance Records (Faltas e Atrasos)
+CREATE TABLE IF NOT EXISTS attendance_records (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  staff_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  date DATE DEFAULT CURRENT_DATE,
+  type TEXT CHECK (type IN ('absence', 'late')) DEFAULT 'absence',
+  reason TEXT,
+  recorded_by UUID REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable RLS
+ALTER TABLE attendance_records ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users can access attendance" ON attendance_records FOR ALL USING (auth.role() = 'authenticated');

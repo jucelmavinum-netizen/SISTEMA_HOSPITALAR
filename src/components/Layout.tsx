@@ -41,6 +41,22 @@ interface LayoutProps {
 export default function Layout({ children, activeTab, setActiveTab, isOffline, user, onLogout }: LayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   const [isNotificationsOpen, setIsNotificationsOpen] = React.useState(false);
+  const [notifications, setNotifications] = React.useState([
+    { id: 1, title: 'Resultado de Exame', desc: 'Maria Domingos - Sangue liberado', time: '10 min ago', type: 'lab', target: 'laboratory', unread: true },
+    { id: 2, title: 'Novo Agendamento', desc: 'Consulta para amanhã às 09:00', time: '1h ago', type: 'app', target: 'scheduling', unread: true },
+  ]);
+
+  const unreadCount = notifications.filter(n => n.unread).length;
+
+  const markAllAsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
+  };
+
+  const handleNotificationClick = (target: string, id: number) => {
+    markAllAsRead(); // For simplicity, clearing all when navigating
+    setActiveTab(target);
+    setIsNotificationsOpen(false);
+  };
 
   const getInitials = (name?: string) => {
     if (!name) return '??';
@@ -78,7 +94,7 @@ export default function Layout({ children, activeTab, setActiveTab, isOffline, u
       {/* Sidebar */}
       <aside 
         className={cn(
-          "bg-navy text-white transition-all duration-300 flex flex-col z-50",
+          "bg-navy text-white transition-all duration-300 flex flex-col z-50 no-print",
           isSidebarOpen ? "w-64" : "w-20"
         )}
       >
@@ -122,7 +138,7 @@ export default function Layout({ children, activeTab, setActiveTab, isOffline, u
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
-        <header className="h-20 bg-white border-b border-slate-200 px-8 flex items-center justify-between shrink-0">
+        <header className="h-20 bg-white border-b border-slate-200 px-8 flex items-center justify-between shrink-0 no-print">
           <div className="flex items-center gap-4 flex-1">
             <div className="relative max-w-md w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -154,35 +170,40 @@ export default function Layout({ children, activeTab, setActiveTab, isOffline, u
 
             <div className="relative">
               <button 
-                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                onClick={() => {
+                  setIsNotificationsOpen(!isNotificationsOpen);
+                  if (!isNotificationsOpen) markAllAsRead();
+                }}
                 className={cn(
                   "relative p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors",
                   isNotificationsOpen && "bg-slate-100 text-emerald"
                 )}
               >
                 <Bell className="w-6 h-6" />
-                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+                {unreadCount > 0 && (
+                  <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
+                )}
               </button>
 
               {isNotificationsOpen && (
                 <div className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[60] py-2">
                   <div className="px-4 py-3 border-b border-slate-50 flex justify-between items-center">
                     <h4 className="font-bold text-slate-900">Notificações</h4>
-                    <span className="text-[10px] font-bold bg-red-100 text-red-600 px-2 py-0.5 rounded-full">2 Novas</span>
+                    {unreadCount > 0 && (
+                      <span className="text-[10px] font-bold bg-red-100 text-red-600 px-2 py-0.5 rounded-full">{unreadCount} Novas</span>
+                    )}
                   </div>
                   <div className="max-h-96 overflow-y-auto">
-                    {[
-                      { title: 'Resultado de Exame', desc: 'Maria Domingos - Sangue liberado', time: '10 min ago', type: 'lab', target: 'laboratory' },
-                      { title: 'Novo Agendamento', desc: 'Consulta para amanhã às 09:00', time: '1h ago', type: 'app', target: 'scheduling' },
-                    ].map((n, i) => (
+                    {notifications.map((n) => (
                       <button 
-                        key={i} 
-                        onClick={() => {
-                          setActiveTab(n.target);
-                          setIsNotificationsOpen(false);
-                        }}
-                        className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-all border-b border-slate-50 last:border-0 group"
+                        key={n.id} 
+                        onClick={() => handleNotificationClick(n.target, n.id)}
+                        className={cn(
+                          "w-full text-left px-4 py-3 hover:bg-slate-50 transition-all border-b border-slate-50 last:border-0 group relative",
+                          n.unread && "bg-blue-50/30"
+                        )}
                       >
+                        {n.unread && <div className="absolute left-1 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-full" />}
                         <p className="text-sm font-bold text-slate-900 group-hover:text-emerald">{n.title}</p>
                         <p className="text-xs text-slate-500 mt-0.5">{n.desc}</p>
                         <p className="text-[10px] text-slate-400 mt-1 font-medium italic">{n.time}</p>
