@@ -33,6 +33,55 @@ export default function Registry() {
     estimatedAge: ''
   });
   const [isCreatingTemp, setIsCreatingTemp] = React.useState(false);
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = React.useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [newPatient, setNewPatient] = React.useState({
+    fullName: '',
+    biNumber: '',
+    birthDate: '',
+    gender: 'M',
+    bloodType: 'Desconhecido',
+    allergies: '',
+    financingType: 'Público',
+    emergencyContactName: '',
+    emergencyContactPhone: ''
+  });
+
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      const processNumber = 'REG-' + Math.floor(100000 + Math.random() * 900000);
+      const { data, error } = await supabase
+        .from('patients')
+        .insert([{
+          full_name: newPatient.fullName,
+          bi_number: newPatient.biNumber,
+          birth_date: newPatient.birthDate,
+          gender: newPatient.gender,
+          blood_type: newPatient.bloodType,
+          allergies: newPatient.allergies ? [newPatient.allergies] : [],
+          financing_type: newPatient.financingType,
+          emergency_contact_name: newPatient.emergencyContactName,
+          emergency_contact_phone: newPatient.emergencyContactPhone,
+          process_number: processNumber,
+          province: 'Luanda',
+          municipality: 'Luanda'
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      setPatient(data);
+      setIsRegisterModalOpen(false);
+      alert(`Paciente cadastrado com sucesso! Processo: ${processNumber}`);
+    } catch (err: any) {
+      alert('Erro ao cadastrar paciente: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleTempIdSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,6 +197,13 @@ export default function Registry() {
       {/* Search Module */}
       <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
         <div className="flex justify-center gap-4">
+          <button
+            onClick={() => setIsRegisterModalOpen(true)}
+            className="flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all border-2 border-emerald bg-emerald text-white hover:bg-emerald/90"
+          >
+            <UserPlus className="w-5 h-5" />
+            Novo Cadastro
+          </button>
           {[
             { id: 'bi', label: 'Bilhete de Identidade', icon: CreditCard },
             { id: 'card', label: 'Cartão de Munícipe', icon: FileText },
@@ -318,6 +374,118 @@ export default function Registry() {
                 </button>
               </div>
             </div>
+          </Modal>
+
+          <Modal
+            isOpen={isRegisterModalOpen}
+            onClose={() => setIsRegisterModalOpen(false)}
+            title="Solicitar Novo Cadastro (Nacional)"
+          >
+            <form onSubmit={handleRegisterSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Nome Completo</label>
+                  <input
+                    required
+                    type="text"
+                    value={newPatient.fullName}
+                    onChange={(e) => setNewPatient({ ...newPatient, fullName: e.target.value })}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Nº do B.I.</label>
+                  <input
+                    required
+                    type="text"
+                    value={newPatient.biNumber}
+                    onChange={(e) => setNewPatient({ ...newPatient, biNumber: e.target.value })}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Data de Nascimento</label>
+                  <input
+                    required
+                    type="date"
+                    value={newPatient.birthDate}
+                    onChange={(e) => setNewPatient({ ...newPatient, birthDate: e.target.value })}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Gênero</label>
+                  <select
+                    value={newPatient.gender}
+                    onChange={(e) => setNewPatient({ ...newPatient, gender: e.target.value })}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
+                  >
+                    <option value="M">Masculino</option>
+                    <option value="F">Feminino</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Tipo Sanguíneo</label>
+                  <select
+                    value={newPatient.bloodType}
+                    onChange={(e) => setNewPatient({ ...newPatient, bloodType: e.target.value })}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
+                  >
+                    <option value="Desconhecido">Desconhecido</option>
+                    <option value="A+">A+</option>
+                    <option value="B+">B+</option>
+                    <option value="AB+">AB+</option>
+                    <option value="O+">O+</option>
+                    <option value="A-">A-</option>
+                    <option value="B-">B-</option>
+                    <option value="AB-">AB-</option>
+                    <option value="O-">O-</option>
+                  </select>
+                </div>
+                <div className="col-span-2 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Alergias Conhecidas</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Penicilina, Dipirona"
+                    value={newPatient.allergies}
+                    onChange={(e) => setNewPatient({ ...newPatient, allergies: e.target.value })}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
+                  />
+                </div>
+                <div className="col-span-2 grid grid-cols-2 gap-4 border-t border-slate-100 pt-4">
+                  <div className="col-span-2">
+                    <h5 className="text-[10px] font-black text-slate-900 uppercase">Contato de Emergência</h5>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Nome do Contato</label>
+                    <input
+                      type="text"
+                      value={newPatient.emergencyContactName}
+                      onChange={(e) => setNewPatient({ ...newPatient, emergencyContactName: e.target.value })}
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Telemóvel</label>
+                    <input
+                      type="tel"
+                      value={newPatient.emergencyContactPhone}
+                      onChange={(e) => setNewPatient({ ...newPatient, emergencyContactPhone: e.target.value })}
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full py-4 bg-emerald text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-emerald/90 transition-all disabled:opacity-50"
+              >
+                {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <UserPlus className="w-5 h-5" />}
+                Cadastrar Paciente
+              </button>
+            </form>
           </Modal>
 
           {/* Clinical History */}

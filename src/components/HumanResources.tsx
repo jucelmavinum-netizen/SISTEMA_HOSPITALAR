@@ -42,7 +42,10 @@ export default function HumanResources() {
     full_name: '',
     role: 'doctor',
     hospital_name: 'Hospital Geral de Luanda',
-    shift: '08:00 - 16:00',
+    shift: '08:00 - 16:00 (Manhã)',
+    specialty: '',
+    license_number: '',
+    contract_type: 'contracted',
     status: 'present',
     attendance_type: 'absence',
     attendance_reason: '',
@@ -114,6 +117,9 @@ export default function HumanResources() {
           role: formData.role,
           hospital_name: formData.hospital_name,
           shift: formData.shift,
+          specialty: formData.specialty,
+          license_number: formData.license_number,
+          contract_type: formData.contract_type,
           status: formData.status,
           created_at: new Date().toISOString()
         }]);
@@ -196,6 +202,9 @@ export default function HumanResources() {
           role: formData.role,
           hospital_name: formData.hospital_name,
           shift: formData.shift,
+          specialty: formData.specialty,
+          license_number: formData.license_number,
+          contract_type: formData.contract_type,
           status: formData.status
         })
         .eq('id', selectedStaff.id);
@@ -220,9 +229,12 @@ export default function HumanResources() {
       full_name: s.full_name,
       role: s.role,
       hospital_name: s.hospital_name || 'Hospital Geral de Luanda',
-      shift: s.shift || '08:00 - 16:00',
+      shift: s.shift || '08:00 - 16:00 (Manhã)',
+      specialty: s.specialty || '',
+      license_number: s.license_number || '',
+      contract_type: s.contract_type || 'contracted',
       status: s.status || 'present'
-    });
+    } as any);
     setIsDetailsModalOpen(true);
   };
 
@@ -303,6 +315,50 @@ export default function HumanResources() {
             />
           </div>
 
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase">Especialidade</label>
+              <input
+                type="text"
+                value={formData.specialty}
+                onChange={(e) => setFormData({ ...formData, specialty: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all"
+                placeholder="Ex: Pediatria"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase">Nº Reg. Profissional</label>
+              <input
+                type="text"
+                value={formData.license_number}
+                onChange={(e) => setFormData({ ...formData, license_number: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all"
+                placeholder="Ex: 12345/AGO"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase">Vínculo Contratual</label>
+            <div className="flex gap-4">
+              {['contracted', 'on-call'].map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, contract_type: type })}
+                  className={cn(
+                    "flex-1 py-3 rounded-xl font-bold border-2 transition-all text-xs uppercase",
+                    formData.contract_type === type 
+                      ? "border-navy bg-navy/5 text-navy"
+                      : "border-slate-100 text-slate-400 hover:border-slate-200"
+                  )}
+                >
+                  {type === 'contracted' ? 'Contratado' : 'Plantonista'}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-500 uppercase">Turno / Escala</label>
             <select
@@ -359,6 +415,50 @@ export default function HumanResources() {
                 <option value="lab_tech">Técnico de Laboratório</option>
                 <option value="pharmacist">Farmacêutico(a)</option>
               </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase">Especialidade</label>
+              <input
+                type="text"
+                value={formData.specialty}
+                onChange={(e) => setFormData({ ...formData, specialty: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all"
+                placeholder="Ex: Pediatria"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase">Nº Reg. Profissional</label>
+              <input
+                type="text"
+                value={formData.license_number}
+                onChange={(e) => setFormData({ ...formData, license_number: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all"
+                placeholder="Ex: 12345/AGO"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase">Vínculo Contratual</label>
+            <div className="flex gap-4">
+              {['contracted', 'on-call'].map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, contract_type: type })}
+                  className={cn(
+                    "flex-1 py-3 rounded-xl font-bold border-2 transition-all text-xs uppercase",
+                    formData.contract_type === type 
+                      ? "border-navy bg-navy/5 text-navy"
+                      : "border-slate-100 text-slate-400 hover:border-slate-200"
+                  )}
+                >
+                  {type === 'contracted' ? 'Contratado' : 'Plantonista'}
+                </button>
+              ))}
             </div>
           </div>
 

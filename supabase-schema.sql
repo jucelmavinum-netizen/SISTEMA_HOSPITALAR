@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   specialty TEXT, -- For doctors
   license_number TEXT, -- Professional license
   shift TEXT, -- Shift/Duty schedule
+  contract_type TEXT CHECK (contract_type IN ('contracted', 'on-call')), -- Vínculo (Contratado/Plantonista)
   status TEXT DEFAULT 'present', -- present, on-call, absent
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -32,6 +33,8 @@ CREATE TABLE IF NOT EXISTS patients (
   blood_type TEXT,
   allergies TEXT[], -- Array of allergies
   chronic_diseases TEXT[], -- Array of chronic diseases
+  emergency_contact_name TEXT,
+  emergency_contact_phone TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   created_by UUID
 );
@@ -163,6 +166,7 @@ ALTER TABLE finance_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE consultations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE prescriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE clinical_evolutions ENABLE ROW LEVEL SECURITY;
 
 -- Policies (Basic Authenticated Access)
 -- In production, these should be refined by role
@@ -201,9 +205,22 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admin can access audit logs') THEN
         CREATE POLICY "Admin can access audit logs" ON audit_logs FOR ALL USING (auth.role() = 'authenticated');
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Authenticated users can access evolutions') THEN
+        CREATE POLICY "Authenticated users can access evolutions" ON clinical_evolutions FOR ALL USING (auth.role() = 'authenticated');
+    END IF;
 END $$;
 
--- 12. Attendance Records (Faltas e Atrasos)
+-- 12. Clinical Evolutions (PEP - Daily Notes)
+CREATE TABLE IF NOT EXISTS clinical_evolutions (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
+  doctor_id UUID REFERENCES profiles(id),
+  notes TEXT NOT NULL,
+  condition_status TEXT CHECK (condition_status IN ('improving', 'stable', 'worsening', 'critical')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 13. Attendance Records (Faltas e Atrasos)
 CREATE TABLE IF NOT EXISTS attendance_records (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   staff_id UUID REFERENCES profiles(id) ON DELETE CASCADE,

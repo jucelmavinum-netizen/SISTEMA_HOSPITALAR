@@ -11,7 +11,8 @@ import {
   Wallet,
   Calendar,
   Package,
-  Loader2
+  Loader2,
+  ClipboardList
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -297,6 +298,36 @@ export default function Dashboard({ user, setActiveTab }: DashboardProps) {
             )}
           </div>
         </div>
+        <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
+          <h3 className="text-xl font-bold text-slate-900 mb-6">Ações Rápidas</h3>
+          <div className="space-y-4">
+            <button 
+              onClick={() => setActiveTab('pep')}
+              className="w-full flex items-center gap-4 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl hover:bg-emerald-100 transition-all group"
+            >
+              <div className="p-3 bg-white rounded-xl shadow-sm group-hover:scale-110 transition-transform">
+                <ClipboardList className="w-6 h-6 text-emerald" />
+              </div>
+              <div className="text-left">
+                <p className="font-bold text-emerald-900">Prontuário (PEP)</p>
+                <p className="text-xs text-emerald-700/60">Abrir histórico completo e prescrição</p>
+              </div>
+            </button>
+            <button 
+              onClick={() => setActiveTab('triage')}
+              className="w-full flex items-center gap-4 p-4 bg-navy text-white rounded-2xl hover:bg-navy/90 transition-all group"
+            >
+              <div className="p-3 bg-white/10 rounded-xl group-hover:scale-110 transition-transform">
+                <Stethoscope className="w-6 h-6 text-white" />
+              </div>
+              <div className="text-left">
+                <p className="font-bold text-white">Fila de Triagem</p>
+                <p className="text-xs text-white/60">Ver pacientes classificados</p>
+              </div>
+            </button>
+          </div>
+        </div>
+
         <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
           <h3 className="text-xl font-bold text-slate-900 mb-6">Alertas Clínicos</h3>
           <div className="space-y-4">

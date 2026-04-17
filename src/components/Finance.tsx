@@ -109,12 +109,22 @@ export default function Finance() {
   };
 
   const handleTriggerPrint = () => {
+    if (records.length === 0) {
+      alert('Não existem movimentações para gerar o relatório.');
+      return;
+    }
     setIsPrintPreviewMode(true);
     setIsCashReportModalOpen(false);
+    // Explicitly scroll to top
+    setTimeout(() => window.scrollTo(0, 0), 0);
   };
 
-  const handleExecutePrint = () => {
-    window.print();
+  const executePrintAction = () => {
+    // Small delay to ensure any pending renders are complete
+    setTimeout(() => {
+      window.focus();
+      window.print();
+    }, 150);
   };
 
   const handleDownloadPDF = (record: any) => {
@@ -124,6 +134,84 @@ export default function Finance() {
       window.print();
     }, 500);
   };
+
+  const renderPrintableContent = () => (
+    <div className="space-y-8 bg-white text-black p-[20mm]">
+      <div className="border-b-4 border-slate-900 pb-10 flex justify-between items-end text-black">
+        <div className="space-y-2">
+          <h1 className="text-5xl font-black italic tracking-tighter text-slate-900">SISA<span className="text-emerald text-emerald-600">ERP</span></h1>
+          <div className="h-1 w-20 bg-emerald bg-emerald-600"></div>
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest mt-4">Gestão Financeira Hospitalar</p>
+        </div>
+        <div className="text-right space-y-1">
+          <p className="text-sm font-bold text-slate-900">RELATÓRIO DE FECHO DE CAIXA</p>
+          <p className="text-[10px] font-bold text-slate-500">{new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+          <p className="text-[10px] text-slate-400 font-medium">Hospital Geral de Luanda</p>
+        </div>
+      </div>
+
+      <div className="mt-12 grid grid-cols-3 gap-10">
+        <div className="p-4 bg-slate-50 rounded-2xl border-l border-t border-slate-200">
+          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total de Receitas</p>
+          <p className="text-xl font-black text-emerald-600 mt-1">{totalIncome.toLocaleString()} Kz</p>
+        </div>
+        <div className="p-4 bg-slate-50 rounded-2xl border-l border-t border-slate-200">
+          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total de Despesas</p>
+          <p className="text-xl font-black text-red-600 mt-1">{totalExpense.toLocaleString()} Kz</p>
+        </div>
+        <div className="p-4 bg-slate-900 text-white rounded-2xl shadow-xl">
+          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest opacity-60">Saldo em Caixa</p>
+          <p className="text-xl font-black font-mono mt-1 text-emerald-400">{(totalIncome - totalExpense).toLocaleString()} Kz</p>
+        </div>
+      </div>
+
+      <div className="mt-16 overflow-hidden">
+        <table className="w-full text-[10px] border-collapse">
+          <thead>
+            <tr className="border-b-2 border-slate-900 text-left">
+              <th className="py-3 px-2 font-black uppercase tracking-wider">Data</th>
+              <th className="py-3 px-2 font-black uppercase tracking-wider">Categoria / Motivo</th>
+              <th className="py-3 px-2 font-black uppercase tracking-wider text-right">Valor Movimentado</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 italic">
+            {records.map((r, i) => (
+              <tr key={i} className="group">
+                <td className="py-3 px-2 font-mono text-slate-400">{new Date(r.created_at).toLocaleDateString()}</td>
+                <td className="py-3 px-2">
+                  <span className="font-bold text-slate-900">{r.category}</span>
+                  <p className="text-[9px] text-slate-400 not-italic">{r.description || 'Sem descrição detalhada'}</p>
+                </td>
+                <td className={cn(
+                  "py-3 px-2 text-right font-black tabular-nums", 
+                  r.type === 'income' ? "text-emerald-600" : "text-red-500"
+                )}>
+                  {r.type === 'income' ? '+' : '-'}{Number(r.amount).toLocaleString()} Kz
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      
+      <div className="mt-40 flex justify-between gap-24">
+        <div className="flex-1 flex flex-col items-center">
+          <div className="w-full border-t border-slate-300"></div>
+          <p className="mt-2 text-[9px] font-black text-slate-400 uppercase">Assinatura Tesouraria</p>
+        </div>
+        <div className="flex-1 flex flex-col items-center">
+          <div className="w-full border-t border-slate-300"></div>
+          <p className="mt-2 text-[9px] font-black text-slate-400 uppercase">Carimbo Oficial</p>
+        </div>
+      </div>
+
+      <div className="mt-16 text-center border-t border-slate-100 pt-8">
+        <p className="text-[8px] text-slate-300 uppercase font-black tracking-[0.2em] italic">
+          Documento Certificado Digitalmente • SISA ERP • ID: {Math.random().toString(36).substr(2, 9).toUpperCase()}
+        </p>
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-8">
@@ -278,104 +366,57 @@ export default function Finance() {
               <Printer className="w-5 h-5" />
               Imprimir Relatório
             </button>
+            </div>
+          </div>
+        </Modal>
+
+      {/* Print Preview Overlay */}
+      {isPrintPreviewMode && (
+        <div className="fixed inset-0 z-[99999] bg-white overflow-y-auto flex flex-col no-print">
+          {/* Print Controls (Always hidden during actual print) */}
+          <div className="sticky top-0 z-[100000] bg-slate-900 text-white p-4 shadow-2xl flex justify-between items-center px-8 border-b border-white/10">
+            <div className="flex items-center gap-4">
+              <div className="p-2 bg-emerald/20 rounded-lg">
+                <Printer className="w-5 h-5 text-emerald" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold leading-none">Relatório de Caixa</h2>
+                <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-widest font-bold">Modo de Pré-visualização</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setIsPrintPreviewMode(false)}
+                className="px-6 py-2.5 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 transition-all text-sm border border-slate-700"
+              >
+                Voltar ao Sistema
+              </button>
+              <button 
+                onClick={executePrintAction}
+                className="px-8 py-2.5 bg-emerald text-white rounded-xl font-bold hover:bg-emerald/90 transition-shadow flex items-center gap-2 text-sm shadow-xl shadow-emerald/40 ring-2 ring-emerald/20"
+              >
+                <Printer className="w-4 h-4" />
+                Imprimir Agora
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 bg-slate-100 flex justify-center p-10">
+             <div className="w-full max-w-[210mm] bg-white min-h-[297mm] p-[20mm] text-black shadow-2xl rounded-sm">
+                <p className="text-center text-slate-400 text-sm italic">O conteúdo abaixo será enviado para a impressora exatamente como exibido.</p>
+                <div className="mt-8">
+                  {/* Re-rendering for visual preview inside system UI */}
+                  {renderPrintableContent()}
+                </div>
+             </div>
           </div>
         </div>
-      </Modal>
+      )}
 
-      {/* Print Preview Overlay (Portal to Body for isolation) */}
+      {/* The Actual Printable Content (Hidden except during printing) */}
       {isPrintPreviewMode && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[9999] bg-slate-900/60 flex items-center justify-center p-4 sm:p-8">
-          <div className="bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl relative flex flex-col">
-            {/* Controls - Hidden during actual print */}
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center shrink-0 print:hidden bg-white sticky top-0 z-10">
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">Pré-visualização</h2>
-                <p className="text-sm text-slate-500">Confirme os dados e clique em imprimir.</p>
-              </div>
-              <div className="flex gap-3">
-                <button 
-                  type="button"
-                  onClick={() => setIsPrintPreviewMode(false)}
-                  className="px-5 py-2.5 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm"
-                >
-                  Fechar
-                </button>
-                <button 
-                  type="button"
-                  onClick={handleExecutePrint}
-                  className="px-6 py-2.5 bg-navy text-white rounded-xl font-bold hover:bg-navy/90 transition-all flex items-center gap-2 text-sm shadow-lg shadow-navy/20"
-                >
-                  <Printer className="w-4 h-4" />
-                  Imprimir Agora
-                </button>
-              </div>
-            </div>
-
-            {/* Content Area - This is what gets printed */}
-            <div className="flex-1 p-10 bg-white print:p-0">
-              <div className="print-only-content space-y-8 bg-white text-black">
-                <div className="border-b-4 border-navy pb-6 flex justify-between items-end">
-                  <div>
-                    <h1 className="text-4xl font-black text-navy italic uppercase">SISA ERP</h1>
-                    <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Relatório Mensal de Caixa</p>
-                  </div>
-                  <div className="text-right text-xs">
-                    <p className="font-bold">Gerado em: {new Date().toLocaleString()}</p>
-                    <p className="text-slate-400">Hospital Geral de Luanda</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-8">
-                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Entradas</p>
-                    <p className="text-lg font-bold text-emerald-600">{totalIncome.toLocaleString()} Kz</p>
-                  </div>
-                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Saídas</p>
-                    <p className="text-lg font-bold text-red-600">{totalExpense.toLocaleString()} Kz</p>
-                  </div>
-                  <div className="p-4 bg-slate-950 text-white rounded-xl">
-                    <p className="text-[10px] font-bold text-white/60 uppercase">Saldo Total</p>
-                    <p className="text-lg font-bold font-mono">{(totalIncome - totalExpense).toLocaleString()} Kz</p>
-                  </div>
-                </div>
-
-                <table className="w-full text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b-2 border-slate-900 text-left">
-                      <th className="py-3 px-2">Data</th>
-                      <th className="py-3 px-2">Categoria</th>
-                      <th className="py-3 px-2">Descrição</th>
-                      <th className="py-3 px-2 text-right">Valor</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-slate-700">
-                    {records.map((r, i) => (
-                      <tr key={i}>
-                        <td className="py-3 px-2">{new Date(r.created_at).toLocaleDateString()}</td>
-                        <td className="py-3 px-2 font-bold text-slate-900">{r.category}</td>
-                        <td className="py-3 px-2 leading-relaxed">{r.description}</td>
-                        <td className={cn("py-3 px-2 text-right font-bold", r.type === 'income' ? "text-emerald-700" : "text-red-700")}>
-                          {r.type === 'income' ? '+' : '-'}{Number(r.amount).toLocaleString()} Kz
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                
-                <div className="pt-24 flex justify-between gap-20">
-                  <div className="flex-1 border-t-2 border-slate-900 pt-3 text-center text-[10px] font-bold uppercase tracking-wider">Assinatura Tesouraria</div>
-                  <div className="flex-1 border-t-2 border-slate-900 pt-3 text-center text-[10px] font-bold uppercase tracking-wider">Carimbo da Unidade</div>
-                </div>
-
-                <div className="pt-12 text-center">
-                  <p className="text-[9px] text-slate-400 uppercase tracking-widest font-medium italic">
-                    Documento gerado eletronicamente pelo SISA ERP Hospitalar
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
+        <div className="printable-area">
+          {renderPrintableContent()}
         </div>,
         document.body
       )}

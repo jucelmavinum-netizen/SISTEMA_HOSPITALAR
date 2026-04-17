@@ -25,32 +25,27 @@
 .manchester-blue { @apply bg-manchester-blue text-white; }
 
 @media print {
-  /* Hide the base application completely */
-  #root, .no-print {
+  /* The main app container is hidden during print */
+  #root {
     display: none !important;
-    height: 0 !important;
-    overflow: hidden !important;
   }
 
-  /* Reset body for printing */
-  body {
-    background: white !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-
-  /* Ensure the portal-mounted content is visible and takes full width */
-  .print-only-content {
-    visibility: visible !important;
+  /* The printable area (portal to body) becomes the only visible thing */
+  .printable-area {
     display: block !important;
-    position: relative !important;
+    visibility: visible !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
     width: 100% !important;
     margin: 0 !important;
-    padding: 2cm !important; /* Standard print margin */
+    padding: 0 !important;
+    background: white !important;
   }
 
-  /* Make sure every parent of print-only-content in the portal is also visible */
-  .print-only-content * {
-    visibility: visible !important;
+  /* Ensure colors are preserved */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 }
