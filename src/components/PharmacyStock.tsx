@@ -38,9 +38,12 @@ export default function PharmacyStock() {
   const [stockFormData, setStockFormData] = React.useState({
     item_name: '',
     category: 'Medicamentos',
+    batch_number: '',
+    unit: 'un',
     quantity: 0,
     min_stock: 10,
-    expiry_date: ''
+    expiry_date: '',
+    manufacturer: ''
   });
 
   const [requestFormData, setRequestFormData] = React.useState({
@@ -53,9 +56,18 @@ export default function PharmacyStock() {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = React.useState(false);
 
   const handleQuickOrder = (item: any) => {
-    if (window.confirm(`Deseja solicitar reposição de emergência para ${item.item_name}?`)) {
-      alert(`Pedido de reposição enviado para o Depósito Central.\nItem: ${item.item_name}\nStatus: Processando`);
-    }
+    setStockFormData({
+      item_name: item.item_name,
+      category: item.category || 'Medicamentos',
+      batch_number: '', // Usually a new entry needs a new batch, or user can fill existing
+      unit: item.unit || 'un',
+      quantity: 0,
+      min_stock: item.min_stock || 10,
+      expiry_date: '',
+      manufacturer: item.manufacturer || ''
+    });
+    setIsStockModalOpen(true);
+    if (isDetailsModalOpen) setIsDetailsModalOpen(false);
   };
 
   const handleShowDetails = (item: any) => {
@@ -83,17 +95,20 @@ export default function PharmacyStock() {
     setIsSubmitting(true);
 
     try {
-      // Check if item already exists
-      const existingItem = inventory.find(i => i.item_name.toLowerCase() === stockFormData.item_name.toLowerCase());
+      // Check if item already exists with SAME BATCH
+      const existingBatch = inventory.find(i => 
+        i.item_name.toLowerCase() === stockFormData.item_name.toLowerCase() && 
+        i.batch_number === stockFormData.batch_number
+      );
 
-      if (existingItem) {
+      if (existingBatch) {
         const { error } = await supabase
           .from('inventory')
           .update({
-            quantity: existingItem.quantity + Number(stockFormData.quantity),
-            expiry_date: stockFormData.expiry_date || existingItem.expiry_date
+            quantity: existingBatch.quantity + Number(stockFormData.quantity),
+            expiry_date: stockFormData.expiry_date || existingBatch.expiry_date
           })
-          .eq('id', existingItem.id);
+          .eq('id', existingBatch.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
@@ -106,9 +121,12 @@ export default function PharmacyStock() {
       setStockFormData({
         item_name: '',
         category: 'Medicamentos',
+        batch_number: '',
+        unit: 'un',
         quantity: 0,
         min_stock: 10,
-        expiry_date: ''
+        expiry_date: '',
+        manufacturer: ''
       });
       fetchInventory();
     } catch (error) {
@@ -214,19 +232,45 @@ export default function PharmacyStock() {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase">Categoria</label>
-              <select
-                value={stockFormData.category}
-                onChange={(e) => setStockFormData({ ...stockFormData, category: e.target.value })}
+              <label className="text-xs font-bold text-slate-500 uppercase">Lote (Batch nº)</label>
+              <input
+                required
+                type="text"
+                value={stockFormData.batch_number}
+                onChange={(e) => setStockFormData({ ...stockFormData, batch_number: e.target.value })}
                 className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all"
-              >
-                <option value="Medicamentos">Medicamentos</option>
-                <option value="Consumíveis">Consumíveis</option>
-                <option value="Equipamentos">Equipamentos</option>
-              </select>
+                placeholder="Ex: LOT-2024-001"
+              />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase">Quantidade</label>
+              <label className="text-xs font-bold text-slate-500 uppercase">Unidade</label>
+              <select
+                value={stockFormData.unit}
+                onChange={(e) => setStockFormData({ ...stockFormData, unit: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all"
+              >
+                <option value="un">Unidades</option>
+                <option value="mg">mg (Miligramas)</option>
+                <option value="ml">ml (Mililitros)</option>
+                <option value="caps">Cápsulas</option>
+                <option value="tabs">Comprimidos</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase">Fabricante</label>
+              <input
+                type="text"
+                value={stockFormData.manufacturer}
+                onChange={(e) => setStockFormData({ ...stockFormData, manufacturer: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-50 border-transparent focus:bg-white focus:border-emerald rounded-xl outline-none text-sm transition-all"
+                placeholder="Ex: Bayer, Pfizer"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase">Quantidade Entrada</label>
               <input
                 required
                 type="number"
@@ -349,21 +393,27 @@ export default function PharmacyStock() {
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                 <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Stock Atual</p>
-                <p className="text-2xl font-black text-slate-900">{selectedItem.quantity} <span className="text-sm font-normal text-slate-500">un</span></p>
+                <p className="text-2xl font-black text-slate-900">{selectedItem.quantity} <span className="text-sm font-normal text-slate-500">{selectedItem.unit}</span></p>
               </div>
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Stock Mínimo</p>
-                <p className="text-2xl font-black text-slate-900">{selectedItem.min_stock} <span className="text-sm font-normal text-slate-500">un</span></p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Lote / Batch</p>
+                <p className="text-sm font-black text-navy">{selectedItem.batch_number || 'Sem Lote'}</p>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <p className="text-[10px] font-bold text-slate-400 uppercase">Data de Validade</p>
-              <div className="flex items-center gap-2 p-4 bg-amber-50 rounded-2xl border border-amber-100/50">
-                <Calendar className="w-5 h-5 text-amber-500" />
-                <span className="font-bold text-amber-700">
-                  {selectedItem.expiry_date ? new Date(selectedItem.expiry_date).toLocaleDateString() : 'Não informada'}
-                </span>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Fabricante</p>
+                <p className="text-sm font-bold text-slate-700">{selectedItem.manufacturer || '-'}</p>
+              </div>
+              <div className="space-y-2 text-right">
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Validade</p>
+                <div className="flex items-center justify-end gap-2 text-amber-600">
+                  <Calendar className="w-4 h-4" />
+                  <span className="text-sm font-bold">
+                    {selectedItem.expiry_date ? new Date(selectedItem.expiry_date).toLocaleDateString() : 'N/A'}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -483,39 +533,44 @@ export default function PharmacyStock() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 text-slate-400 text-[10px] font-bold uppercase tracking-widest">
-                    <th className="px-6 py-4">Item</th>
+                    <th className="px-6 py-4">Item (Lote)</th>
                     <th className="px-6 py-4">Categoria</th>
                     <th className="px-6 py-4">Stock Atual</th>
-                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4">Fabricante</th>
                     <th className="px-6 py-4">Validade</th>
                     <th className="px-6 py-4 text-right">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredInventory.length > 0 ? filteredInventory.map((item, i) => {
+                    const expiryDate = item.expiry_date ? new Date(item.expiry_date) : null;
+                    const isExpired = expiryDate && expiryDate < new Date();
+                    const isExpiringSoon = expiryDate && !isExpired && expiryDate < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
                     const isCritical = item.quantity <= item.min_stock;
-                    const isWarning = item.quantity <= item.min_stock * 1.5;
                     
                     return (
-                      <tr key={i} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-6 py-4 font-bold text-slate-900">{item.item_name}</td>
+                      <tr key={i} className={cn("hover:bg-slate-50 transition-colors", isExpired ? "bg-red-50/30" : "")}>
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-slate-900">{item.item_name}</div>
+                          <div className="text-[10px] text-slate-400 font-mono">lote: {item.batch_number || 'S/L'}</div>
+                        </td>
                         <td className="px-6 py-4 text-sm text-slate-500">{item.category}</td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
                             <span className={cn("font-bold", isCritical ? "text-red-600" : "text-slate-700")}>
-                              {item.quantity}
+                              {item.quantity} {item.unit}
                             </span>
-                            {isCritical && <ArrowDown className="w-3 h-3 text-red-500" />}
                           </div>
                         </td>
+                        <td className="px-6 py-4 text-sm text-slate-500">{item.manufacturer || '-'}</td>
                         <td className="px-6 py-4">
-                          <div className={cn(
-                            "w-2 h-2 rounded-full",
-                            isCritical ? "bg-red-500" : isWarning ? "bg-amber-500" : "bg-emerald-500"
-                          )} />
-                        </td>
-                        <td className="px-6 py-4 text-xs text-slate-400 font-medium">
-                          {item.expiry_date ? new Date(item.expiry_date).toLocaleDateString() : 'N/A'}
+                           <div className={cn(
+                             "text-[10px] font-bold px-2 py-1 rounded inline-flex items-center gap-1",
+                             isExpired ? "bg-red-100 text-red-600" : isExpiringSoon ? "bg-amber-100 text-amber-600" : "bg-emerald-100 text-emerald-600"
+                           )}>
+                             <Calendar className="w-3 h-3" />
+                             {item.expiry_date ? new Date(item.expiry_date).toLocaleDateString() : 'N/A'}
+                           </div>
                         </td>
                         <td className="px-6 py-4 text-right">
                           <button 

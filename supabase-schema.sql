@@ -61,12 +61,43 @@ CREATE TABLE IF NOT EXISTS inventory (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   item_name TEXT NOT NULL,
   category TEXT,
+  batch_number TEXT, -- Lote
+  unit TEXT DEFAULT 'un', -- Unidade (mg, ml, caps)
   quantity INTEGER DEFAULT 0,
   min_stock INTEGER DEFAULT 10,
   expiry_date DATE,
+  manufacturer TEXT,
   hospital_id UUID,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 4.1. Dispensations (Uso/Administração de Medicamentos)
+CREATE TABLE IF NOT EXISTS dispensations (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  inventory_id UUID REFERENCES inventory(id) ON DELETE CASCADE,
+  patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
+  nurse_id UUID REFERENCES profiles(id),
+  quantity INTEGER NOT NULL,
+  administered_at TIMESTAMPTZ DEFAULT NOW(),
+  notes TEXT
+);
+
+-- Trigger to automatically update inventory after dispensation
+CREATE OR REPLACE FUNCTION decrement_inventory_after_dispensation()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE inventory
+  SET quantity = quantity - NEW.quantity
+  WHERE id = NEW.inventory_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_decrement_inventory_dispensation ON dispensations;
+CREATE TRIGGER tr_decrement_inventory_dispensation
+AFTER INSERT ON dispensations
+FOR EACH ROW
+EXECUTE FUNCTION decrement_inventory_after_dispensation();
 
 -- 5. Exams
 CREATE TABLE IF NOT EXISTS exams (
@@ -167,8 +198,8 @@ ALTER TABLE consultations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE prescriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clinical_evolutions ENABLE ROW LEVEL SECURITY;
-
--- Policies (Basic Authenticated Access)
+ALTER TABLE attendance_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dispensations ENABLE ROW LEVEL SECURITY;
 -- In production, these should be refined by role
 DO $$ 
 BEGIN
@@ -207,6 +238,12 @@ BEGIN
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Authenticated users can access evolutions') THEN
         CREATE POLICY "Authenticated users can access evolutions" ON clinical_evolutions FOR ALL USING (auth.role() = 'authenticated');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Authenticated users can access attendance') THEN
+        CREATE POLICY "Authenticated users can access attendance" ON attendance_records FOR ALL USING (auth.role() = 'authenticated');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Authenticated users can access dispensations') THEN
+        CREATE POLICY "Authenticated users can access dispensations" ON dispensations FOR ALL USING (auth.role() = 'authenticated');
     END IF;
 END $$;
 

@@ -14,7 +14,10 @@ import {
   Trash2,
   Save,
   Clock,
-  ExternalLink
+  ExternalLink,
+  ShieldCheck,
+  Package,
+  AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -28,10 +31,15 @@ export default function PEP() {
   const [clinicalData, setClinicalData] = React.useState<any>({
     consultations: [],
     evolutions: [],
-    prescriptions: []
+    prescriptions: [],
+    dispensations: []
   });
 
-  const [activeSubTab, setActiveSubTab] = React.useState<'history' | 'anamnese' | 'evolution' | 'prescription'>('history');
+  const [inventory, setInventory] = React.useState<any[]>([]);
+  const [isAdministering, setIsAdministering] = React.useState(false);
+  const [selectedMedForDispense, setSelectedMedForDispense] = React.useState<any>(null);
+
+  const [activeSubTab, setActiveSubTab] = React.useState<'history' | 'anamnese' | 'evolution' | 'prescription' | 'administration'>('history');
 
   const [formData, setFormData] = React.useState({
     symptoms: '',
@@ -60,17 +68,21 @@ export default function PEP() {
       setPatient(patientData);
 
       // Fetch all clinical data
-      const [cons, evol, presc] = await Promise.all([
+      const [cons, evol, presc, disp, inv] = await Promise.all([
         supabase.from('consultations').select('*').eq('patient_id', patientData.id).order('created_at', { ascending: false }),
         supabase.from('clinical_evolutions').select('*').eq('patient_id', patientData.id).order('created_at', { ascending: false }),
-        supabase.from('prescriptions').select('*').eq('patient_id', patientData.id).order('created_at', { ascending: false })
+        supabase.from('prescriptions').select('*').eq('patient_id', patientData.id).order('created_at', { ascending: false }),
+        supabase.from('dispensations').select('*, inventory(item_name, batch_number)').eq('patient_id', patientData.id).order('administered_at', { ascending: false }),
+        supabase.from('inventory').select('*').gt('quantity', 0)
       ]);
 
       setClinicalData({
         consultations: cons.data || [],
         evolutions: evol.data || [],
-        prescriptions: presc.data || []
+        prescriptions: presc.data || [],
+        dispensations: disp.data || []
       });
+      setInventory(inv.data || []);
 
     } catch (err: any) {
       alert('Paciente não encontrado: ' + err.message);
@@ -156,6 +168,30 @@ export default function PEP() {
     });
   };
 
+  const handleDispense = async (inventoryId: string, quantity: number) => {
+    if (!patient) return;
+    setIsAdministering(true);
+    try {
+      const { error } = await supabase
+        .from('dispensations')
+        .insert([{
+          patient_id: patient.id,
+          inventory_id: inventoryId,
+          quantity: quantity,
+          notes: `Administração de medicação prescrita`
+        }]);
+
+      if (error) throw error;
+      alert('Administração confirmada e stock atualizado!');
+      setSelectedMedForDispense(null);
+      handleSearch(); // Refresh
+    } catch (err: any) {
+      alert('Erro na administração: ' + err.message);
+    } finally {
+      setIsAdministering(false);
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
@@ -238,6 +274,7 @@ export default function PEP() {
                 { id: 'anamnese', label: 'Nova Consulta', icon: Stethoscope },
                 { id: 'evolution', label: 'Evolução Diária', icon: Activity },
                 { id: 'prescription', label: 'Receituário', icon: Pill },
+                { id: 'administration', label: 'Administração', icon: ShieldCheck },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -490,29 +527,123 @@ export default function PEP() {
                            </div>
 
                            <div className="space-y-2">
-                              {p.medications.map((m: any, idx: number) => (
-                                <div key={idx} className="flex items-center gap-3 text-sm text-slate-700 bg-white p-3 rounded-xl border border-slate-100">
-                                  <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                                  <span className="font-bold">{m.name}</span>
-                                  <span className="text-slate-400">|</span>
-                                  <span>{m.dosage}</span>
-                                  <span className="text-slate-400 ml-auto">{m.frequency}</span>
-                                </div>
-                              ))}
+                              {p.medications.map((m: any, idx: number) => {
+                                const matchedStock = inventory.filter(i => i.item_name.toLowerCase().includes(m.name.toLowerCase()));
+                                
+                                return (
+                                  <div key={idx} className="flex items-center gap-3 text-sm text-slate-700 bg-white p-3 rounded-xl border border-slate-100 group">
+                                    <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                                    <span className="font-bold">{m.name}</span>
+                                    <span className="text-slate-400">|</span>
+                                    <span>{m.dosage}</span>
+                                    <span className="text-slate-400 ml-auto">{m.frequency}</span>
+                                    <button 
+                                      onClick={() => setSelectedMedForDispense({ ...m, matchedStock })}
+                                      className="hidden group-hover:flex items-center gap-1 px-3 py-1 bg-navy text-white text-[10px] font-bold rounded-lg uppercase"
+                                    >
+                                      Dar Dose
+                                    </button>
+                                  </div>
+                                );
+                              })}
                            </div>
 
                            <div className="mt-6 pt-4 border-t border-slate-200 flex justify-between items-center">
                               <span className="text-[10px] font-bold text-slate-400 italic">Assinado Digitalmente</span>
-                              <button className="text-xs font-bold text-emerald flex items-center gap-1 hover:underline">
-                                Imprimir Guia <ExternalLink className="w-3 h-3" />
-                              </button>
+                              <div className="flex gap-4 text-xs font-bold">
+                                <button className="text-emerald hover:underline flex items-center gap-1">
+                                  Imprimir Guia <ExternalLink className="w-3 h-3" />
+                                </button>
+                              </div>
                            </div>
                          </div>
                       ))}
                    </div>
                 </div>
               )}
+
+              {activeSubTab === 'administration' && (
+                <div className="space-y-6">
+                   <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-100 flex items-center gap-4 mb-8">
+                     <ShieldCheck className="w-8 h-8 text-emerald-600" />
+                     <div>
+                       <h3 className="font-bold text-emerald-900">Registro de Administração de Enfermagem</h3>
+                       <p className="text-sm text-emerald-700/60">Controle rigoroso de dosagem e baixa automática de estoque.</p>
+                     </div>
+                   </div>
+
+                   <div className="space-y-4">
+                      {clinicalData.dispensations.length > 0 ? clinicalData.dispensations.map((d: any) => (
+                        <div key={d.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                           <div className="flex items-center gap-4">
+                              <div className="p-2 bg-white rounded-xl shadow-sm">
+                                <Package className="w-5 h-5 text-slate-400" />
+                              </div>
+                              <div>
+                                <h4 className="font-bold text-slate-900">{d.inventory?.item_name || 'Item'}</h4>
+                                <p className="text-[10px] text-slate-500 font-bold uppercase">Lote: {d.inventory?.batch_number || '-'}</p>
+                              </div>
+                           </div>
+                           <div className="text-right">
+                              <p className="text-sm font-bold text-emerald-600">{d.quantity} un administrado</p>
+                              <p className="text-[10px] text-slate-400 font-bold">{new Date(d.administered_at).toLocaleString()}</p>
+                           </div>
+                        </div>
+                      )) : (
+                        <div className="text-center py-12 text-slate-400 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                           <ShieldCheck className="w-12 h-12 mx-auto mb-4 opacity-10" />
+                           <p>Nenhuma administração registrada para este paciente nas últimas 24h.</p>
+                        </div>
+                      )}
+                   </div>
+                </div>
+              )}
             </div>
+
+            <Modal
+              isOpen={!!selectedMedForDispense}
+              onClose={() => setSelectedMedForDispense(null)}
+              title="Confirmar Administração de Dose"
+            >
+              {selectedMedForDispense && (
+                <div className="space-y-6">
+                  <div className="p-4 bg-navy text-white rounded-2xl shadow-xl">
+                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Medicamento Prescrito</p>
+                    <h3 className="text-xl font-bold">{selectedMedForDispense.name}</h3>
+                    <p className="text-emerald-400 font-bold">{selectedMedForDispense.dosage} - {selectedMedForDispense.frequency}</p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="text-xs font-bold text-slate-500 uppercase">Selecione o Lote em Stock</label>
+                    <div className="space-y-2">
+                       {selectedMedForDispense.matchedStock.length > 0 ? selectedMedForDispense.matchedStock.map((lot: any) => (
+                         <button
+                           key={lot.id}
+                           onClick={() => handleDispense(lot.id, 1)}
+                           disabled={isAdministering}
+                           className="w-full p-4 bg-slate-50 hover:bg-white border border-slate-200 hover:border-emerald rounded-2xl text-left flex justify-between items-center group transition-all"
+                         >
+                           <div>
+                             <p className="font-bold text-slate-900 group-hover:text-emerald">Lote: {lot.batch_number}</p>
+                             <p className="text-xs text-slate-500">Validade: {new Date(lot.expiry_date).toLocaleDateString()}</p>
+                           </div>
+                           <div className="text-right">
+                             <p className="font-bold text-slate-900">{lot.quantity} {lot.unit}</p>
+                             <p className="text-[10px] text-slate-400 uppercase font-black">Disponível</p>
+                           </div>
+                         </button>
+                       )) : (
+                         <div className="p-8 text-center bg-red-50 border border-red-100 rounded-2xl">
+                           <AlertTriangle className="w-8 h-8 text-red-500 mx-auto mb-2" />
+                           <p className="text-sm font-bold text-red-700">SEM STOCK DISPONÍVEL</p>
+                           <p className="text-xs text-red-600/60 mt-1">Solicite reposição imediata à Farmácia.</p>
+                         </div>
+                       )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </Modal>
           </div>
         </div>
       ) : (
