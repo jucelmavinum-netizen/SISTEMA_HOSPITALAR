@@ -10,7 +10,7 @@ export interface Patient {
   qrCode?: string;
   contact?: string;
   bloodType?: string;
-  allergies?: string[];
+  alergias?: string[];
 }
 
 export interface Appointment {

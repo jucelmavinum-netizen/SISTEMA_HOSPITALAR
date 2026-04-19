@@ -59,11 +59,11 @@ export default function PharmacyStock() {
     setStockFormData({
       item_name: item.item_name,
       category: item.category || 'Medicamentos',
-      batch_number: '', // Usually a new entry needs a new batch, or user can fill existing
+      batch_number: item.batch_number || '',
       unit: item.unit || 'un',
       quantity: 0,
       min_stock: item.min_stock || 10,
-      expiry_date: '',
+      expiry_date: item.expiry_date || '',
       manufacturer: item.manufacturer || ''
     });
     setIsStockModalOpen(true);

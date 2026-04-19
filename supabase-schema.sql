@@ -31,10 +31,12 @@ CREATE TABLE IF NOT EXISTS patients (
   financing_type TEXT,
   insurer TEXT,
   blood_type TEXT,
-  allergies TEXT[], -- Array of allergies
+  alergias TEXT[], -- Array of allergies
   chronic_diseases TEXT[], -- Array of chronic diseases
   emergency_contact_name TEXT,
   emergency_contact_phone TEXT,
+  fingerprint_id TEXT UNIQUE, -- ID da biometria
+  municipal_card_id TEXT UNIQUE, -- NIF ou ID do cartão de munícipe
   created_at TIMESTAMPTZ DEFAULT NOW(),
   created_by UUID
 );

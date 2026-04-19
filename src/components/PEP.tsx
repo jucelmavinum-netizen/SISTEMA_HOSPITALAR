@@ -253,7 +253,7 @@ export default function PEP() {
                 <div>
                   <p className="text-[10px] uppercase font-bold text-slate-400">Alergias</p>
                   <p className="font-bold text-amber-600">
-                    {patient.allergies?.length > 0 ? patient.allergies.join(', ') : 'Nenhuma relatada'}
+                    {patient.alergias?.length > 0 ? patient.alergias.join(', ') : 'Nenhuma relatada'}
                   </p>
                 </div>
                 <div>

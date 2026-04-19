@@ -35,21 +35,25 @@ export default function Registry() {
   const [isCreatingTemp, setIsCreatingTemp] = React.useState(false);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [registerError, setRegisterError] = React.useState<string | null>(null);
   const [newPatient, setNewPatient] = React.useState({
     fullName: '',
     biNumber: '',
     birthDate: '',
     gender: 'M',
     bloodType: 'Desconhecido',
-    allergies: '',
+    alergias: '',
     financingType: 'Público',
     emergencyContactName: '',
-    emergencyContactPhone: ''
+    emergencyContactPhone: '',
+    fingerprintId: '',
+    municipalCardId: ''
   });
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setRegisterError(null);
 
     try {
       const processNumber = 'REG-' + Math.floor(100000 + Math.random() * 900000);
@@ -61,10 +65,12 @@ export default function Registry() {
           birth_date: newPatient.birthDate,
           gender: newPatient.gender,
           blood_type: newPatient.bloodType,
-          allergies: newPatient.allergies ? [newPatient.allergies] : [],
+          alergias: newPatient.alergias ? [newPatient.alergias] : [],
           financing_type: newPatient.financingType,
           emergency_contact_name: newPatient.emergencyContactName,
           emergency_contact_phone: newPatient.emergencyContactPhone,
+          fingerprint_id: newPatient.fingerprintId || null,
+          municipal_card_id: newPatient.municipalCardId || null,
           process_number: processNumber,
           province: 'Luanda',
           municipality: 'Luanda'
@@ -72,12 +78,25 @@ export default function Registry() {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === '23505') {
+          if (error.message.includes('bi_number')) {
+            throw new Error('Este número de B.I. já está cadastrado no sistema.');
+          } else if (error.message.includes('municipal_card_id')) {
+            throw new Error('Este Cartão Municipal já está cadastrado.');
+          } else if (error.message.includes('fingerprint_id')) {
+            throw new Error('Esta Biometria já está vinculada a outro paciente.');
+          }
+          throw new Error('Dados duplicados encontrados. Verifique as identificações.');
+        }
+        throw error;
+      };
+
       setPatient(data);
       setIsRegisterModalOpen(false);
-      alert(`Paciente cadastrado com sucesso! Processo: ${processNumber}`);
+      alert(`Paciente cadastrado com sucesso!\nNº Processo: ${processNumber}`);
     } catch (err: any) {
-      alert('Erro ao cadastrar paciente: ' + err.message);
+      setRegisterError(err.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -122,15 +141,22 @@ export default function Registry() {
     setPatient(null);
 
     try {
-      const { data, error } = await supabase
-        .from('patients')
-        .select('*')
-        .eq('bi_number', searchTerm)
-        .single();
+      let query = supabase.from('patients').select('*');
+      
+      if (searchType === 'bi') {
+        query = query.eq('bi_number', searchTerm);
+      } else if (searchType === 'card') {
+        query = query.eq('municipal_card_id', searchTerm);
+      } else if (searchType === 'fingerprint') {
+        query = query.eq('fingerprint_id', searchTerm);
+      }
+
+      const { data, error } = await query.single();
 
       if (error) {
         if (error.code === 'PGRST116') {
-          setError('Paciente não encontrado com este B.I.');
+          const typeLabel = searchType === 'bi' ? 'B.I.' : searchType === 'card' ? 'Cartão' : 'Biometria';
+          setError(`Paciente não encontrado com esta identificação (${typeLabel}).`);
         } else {
           throw error;
         }
@@ -196,10 +222,13 @@ export default function Registry() {
 
       {/* Search Module */}
       <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
-        <div className="flex justify-center gap-4">
+        <div className="flex justify-center flex-wrap gap-4">
           <button
-            onClick={() => setIsRegisterModalOpen(true)}
-            className="flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all border-2 border-emerald bg-emerald text-white hover:bg-emerald/90"
+            onClick={() => {
+              setRegisterError(null);
+              setIsRegisterModalOpen(true);
+            }}
+            className="flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all border-2 border-emerald bg-emerald text-white hover:bg-emerald/90 shadow-lg shadow-emerald/20"
           >
             <UserPlus className="w-5 h-5" />
             Novo Cadastro
@@ -231,7 +260,11 @@ export default function Registry() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            placeholder={searchType === 'bi' ? "Digite o número do BI (ex: 001234567LA041)" : "Aguardando leitura..."}
+            placeholder={
+              searchType === 'bi' ? "Digite o número do BI (ex: 001234567LA041)" : 
+              searchType === 'card' ? "Digite o número do Cartão" : 
+              "Aguardando leitura biométrica..."
+            }
             className="w-full pl-6 pr-32 py-5 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald transition-all text-xl font-medium"
           />
           <button 
@@ -245,9 +278,21 @@ export default function Registry() {
         </div>
 
         {error && (
-          <div className="max-w-2xl mx-auto p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 text-sm font-medium">
-            <AlertCircle className="w-5 h-5 shrink-0" />
-            {error}
+          <div className="max-w-2xl mx-auto p-6 bg-red-50 border border-red-100 rounded-3xl space-y-4">
+            <div className="flex items-center gap-3 text-red-600 font-bold">
+              <AlertCircle className="w-6 h-6 shrink-0" />
+              {error}
+            </div>
+            <button
+              onClick={() => {
+                setRegisterError(null);
+                setIsRegisterModalOpen(true);
+              }}
+              className="w-full py-3 bg-white border-2 border-red-100 text-red-600 rounded-xl font-bold hover:bg-red-100 transition-all flex items-center justify-center gap-2"
+            >
+              <UserPlus className="w-5 h-5" />
+              Deseja realizar um Novo Cadastro?
+            </button>
           </div>
         )}
       </div>
@@ -270,7 +315,7 @@ export default function Registry() {
                 />
               </div>
               <h2 className="text-xl font-bold text-slate-900">{patient.full_name}</h2>
-              <p className="text-sm text-slate-500">BI: {patient.bi_number}</p>
+              <p className="text-sm text-slate-500">BI: {patient.bi_number || 'Não informado'}</p>
               
               <div className="mt-6 pt-6 border-t border-slate-100 grid grid-cols-2 gap-4 text-left">
                 <div>
@@ -279,7 +324,7 @@ export default function Registry() {
                 </div>
                 <div>
                   <p className="text-[10px] uppercase font-bold text-slate-400">Província</p>
-                  <p className="font-bold text-slate-700">{patient.province}</p>
+                  <p className="font-bold text-slate-700">{patient.province || 'Luanda'}</p>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase font-bold text-slate-400">Financiamento</p>
@@ -300,193 +345,6 @@ export default function Registry() {
               </button>
             </div>
           </div>
-
-          <Modal
-            isOpen={isCardModalOpen}
-            onClose={() => setIsCardModalOpen(false)}
-            title="Cartão Digital do Paciente"
-          >
-            <div className="space-y-6">
-              <div id="digital-card" className="relative bg-gradient-to-br from-navy to-slate-800 p-8 rounded-3xl text-white overflow-hidden shadow-2xl">
-                {/* Decorative Elements */}
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl" />
-                <div className="absolute bottom-0 left-0 w-24 h-24 bg-emerald/10 rounded-full -ml-12 -mb-12 blur-xl" />
-                
-                <div className="relative flex justify-between items-start mb-8">
-                  <div>
-                    <h4 className="text-xl font-black tracking-tighter italic">SISA ERP</h4>
-                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Sistema Integrado de Saúde</p>
-                  </div>
-                  <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center backdrop-blur-md">
-                    <QrCode className="w-6 h-6 text-emerald" />
-                  </div>
-                </div>
-
-                <div className="relative flex gap-6 items-center">
-                  <div className="w-24 h-24 rounded-2xl border-2 border-white/20 overflow-hidden bg-white/5">
-                    <img 
-                      src={`https://picsum.photos/seed/${patient.id}/200/200`} 
-                      alt="Patient" 
-                      className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-bold leading-tight">{patient.full_name}</h3>
-                    <p className="text-emerald font-mono text-sm mt-1">{patient.process_number}</p>
-                  </div>
-                </div>
-
-                <div className="relative mt-8 grid grid-cols-2 gap-6 pt-6 border-t border-white/10">
-                  <div>
-                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">B.I. / Documento</p>
-                    <p className="font-bold text-sm">{patient.bi_number}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Tipo de Sangue</p>
-                    <p className="font-bold text-sm">A+</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Província</p>
-                    <p className="font-bold text-sm">{patient.province}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Validade</p>
-                    <p className="font-bold text-sm">Indeterminada</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-3">
-                <button 
-                  onClick={handlePrint}
-                  className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-200 transition-all"
-                >
-                  <Printer className="w-5 h-5" />
-                  Imprimir Cartão
-                </button>
-                <button 
-                  onClick={handleDownload}
-                  className="flex-1 py-4 bg-navy text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-navy/90 transition-all"
-                >
-                  <Download className="w-5 h-5" />
-                  Baixar PDF
-                </button>
-              </div>
-            </div>
-          </Modal>
-
-          <Modal
-            isOpen={isRegisterModalOpen}
-            onClose={() => setIsRegisterModalOpen(false)}
-            title="Solicitar Novo Cadastro (Nacional)"
-          >
-            <form onSubmit={handleRegisterSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2 space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Nome Completo</label>
-                  <input
-                    required
-                    type="text"
-                    value={newPatient.fullName}
-                    onChange={(e) => setNewPatient({ ...newPatient, fullName: e.target.value })}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Nº do B.I.</label>
-                  <input
-                    required
-                    type="text"
-                    value={newPatient.biNumber}
-                    onChange={(e) => setNewPatient({ ...newPatient, biNumber: e.target.value })}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Data de Nascimento</label>
-                  <input
-                    required
-                    type="date"
-                    value={newPatient.birthDate}
-                    onChange={(e) => setNewPatient({ ...newPatient, birthDate: e.target.value })}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Gênero</label>
-                  <select
-                    value={newPatient.gender}
-                    onChange={(e) => setNewPatient({ ...newPatient, gender: e.target.value })}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
-                  >
-                    <option value="M">Masculino</option>
-                    <option value="F">Feminino</option>
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Tipo Sanguíneo</label>
-                  <select
-                    value={newPatient.bloodType}
-                    onChange={(e) => setNewPatient({ ...newPatient, bloodType: e.target.value })}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
-                  >
-                    <option value="Desconhecido">Desconhecido</option>
-                    <option value="A+">A+</option>
-                    <option value="B+">B+</option>
-                    <option value="AB+">AB+</option>
-                    <option value="O+">O+</option>
-                    <option value="A-">A-</option>
-                    <option value="B-">B-</option>
-                    <option value="AB-">AB-</option>
-                    <option value="O-">O-</option>
-                  </select>
-                </div>
-                <div className="col-span-2 space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Alergias Conhecidas</label>
-                  <input
-                    type="text"
-                    placeholder="Ex: Penicilina, Dipirona"
-                    value={newPatient.allergies}
-                    onChange={(e) => setNewPatient({ ...newPatient, allergies: e.target.value })}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
-                  />
-                </div>
-                <div className="col-span-2 grid grid-cols-2 gap-4 border-t border-slate-100 pt-4">
-                  <div className="col-span-2">
-                    <h5 className="text-[10px] font-black text-slate-900 uppercase">Contato de Emergência</h5>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase">Nome do Contato</label>
-                    <input
-                      type="text"
-                      value={newPatient.emergencyContactName}
-                      onChange={(e) => setNewPatient({ ...newPatient, emergencyContactName: e.target.value })}
-                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase">Telemóvel</label>
-                    <input
-                      type="tel"
-                      value={newPatient.emergencyContactPhone}
-                      onChange={(e) => setNewPatient({ ...newPatient, emergencyContactPhone: e.target.value })}
-                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-4 bg-emerald text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-emerald/90 transition-all disabled:opacity-50"
-              >
-                {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <UserPlus className="w-5 h-5" />}
-                Cadastrar Paciente
-              </button>
-            </form>
-          </Modal>
 
           {/* Clinical History */}
           <div className="lg:col-span-2 space-y-6">
@@ -509,10 +367,10 @@ export default function Registry() {
                     </div>
                     <div className="flex-1">
                       <div className="flex justify-between">
-                        <h4 className="font-bold text-slate-900">Triagem: {item.classification.toUpperCase()}</h4>
-                        <span className="text-xs font-medium text-slate-400">{new Date(item.created_at).toLocaleDateString()}</span>
+                        <h4 className="font-bold text-slate-900">Registro: {new Date(item.created_at).toLocaleDateString()}</h4>
+                        <span className="text-xs font-medium text-slate-400">{new Date(item.created_at).toLocaleTimeString()}</span>
                       </div>
-                      <p className="text-sm text-slate-500 line-clamp-2">{item.notes}</p>
+                      <p className="text-sm text-slate-500 line-clamp-2">{item.notes || 'Sem observações registradas.'}</p>
                       <div className="mt-2 flex items-center gap-3">
                         <span className={cn(
                           "text-[10px] font-bold uppercase px-2 py-0.5 rounded text-white",
@@ -521,7 +379,7 @@ export default function Registry() {
                           item.classification === 'yellow' ? 'bg-yellow-500' :
                           item.classification === 'green' ? 'bg-green-500' : 'bg-blue-500'
                         )}>
-                          {item.classification}
+                          {item.classification || 'normal'}
                         </span>
                         <button className="text-xs font-bold text-emerald flex items-center gap-1 hover:underline">
                           Ver detalhes <ExternalLink className="w-3 h-3" />
@@ -540,7 +398,7 @@ export default function Registry() {
           </div>
         </motion.div>
       ) : (
-        /* Temporary ID Generation */
+        /* Empty State / Temp ID */
         <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm max-w-2xl mx-auto">
           <div className="flex items-center gap-4 mb-6">
             <div className="p-3 bg-amber-50 rounded-2xl">
@@ -597,6 +455,241 @@ export default function Registry() {
           </form>
         </div>
       )}
+
+      {/* New Registration Modal */}
+      <Modal
+        isOpen={isRegisterModalOpen}
+        onClose={() => setIsRegisterModalOpen(false)}
+        title="Solicitar Novo Cadastro (Nacional)"
+      >
+        <form onSubmit={handleRegisterSubmit} className="space-y-4">
+          {registerError && (
+            <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 text-sm font-medium">
+              <AlertCircle className="w-5 h-5 shrink-0" />
+              {registerError}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2 space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Nome Completo</label>
+              <input
+                required
+                type="text"
+                value={newPatient.fullName}
+                onChange={(e) => setNewPatient({ ...newPatient, fullName: e.target.value })}
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Nº do B.I.</label>
+              <input
+                required
+                type="text"
+                value={newPatient.biNumber}
+                onChange={(e) => setNewPatient({ ...newPatient, biNumber: e.target.value })}
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Data de Nascimento</label>
+              <input
+                required
+                type="date"
+                value={newPatient.birthDate}
+                onChange={(e) => setNewPatient({ ...newPatient, birthDate: e.target.value })}
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Gênero</label>
+              <select
+                value={newPatient.gender}
+                onChange={(e) => setNewPatient({ ...newPatient, gender: e.target.value })}
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
+              >
+                <option value="M">Masculino</option>
+                <option value="F">Feminino</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Tipo Sanguíneo</label>
+              <select
+                value={newPatient.bloodType}
+                onChange={(e) => setNewPatient({ ...newPatient, bloodType: e.target.value })}
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
+              >
+                <option value="Desconhecido">Desconhecido</option>
+                <option value="A+">A+</option>
+                <option value="B+">B+</option>
+                <option value="AB+">AB+</option>
+                <option value="O+">O+</option>
+                <option value="A-">A-</option>
+                <option value="B-">B-</option>
+                <option value="AB-">AB-</option>
+                <option value="O-">O-</option>
+              </select>
+            </div>
+            <div className="col-span-2 space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Alergias Conhecidas</label>
+              <input
+                type="text"
+                placeholder="Ex: Penicilina, Dipirona"
+                value={newPatient.alergias}
+                onChange={(e) => setNewPatient({ ...newPatient, alergias: e.target.value })}
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
+              />
+            </div>
+            <div className="col-span-2 grid grid-cols-2 gap-4 border-t border-slate-100 pt-4">
+              <div className="col-span-2">
+                <h5 className="text-[10px] font-black text-slate-900 uppercase">Segurança e Biometria (Opcional)</h5>
+              </div>
+              <div className="col-span-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = 'BIO-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+                    setNewPatient({ ...newPatient, fingerprintId: id });
+                  }}
+                  className={cn(
+                    "w-full p-4 border-2 border-dashed rounded-2xl font-bold flex flex-col items-center gap-2 transition-all",
+                    newPatient.fingerprintId 
+                      ? "bg-emerald/5 border-emerald text-emerald" 
+                      : "bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200"
+                  )}
+                >
+                  <Fingerprint className={cn("w-8 h-8", newPatient.fingerprintId ? "animate-pulse" : "opacity-40")} />
+                  <span>{newPatient.fingerprintId ? 'Biometria Registrada' : 'Vincular Impressão Digital (Opcional)'}</span>
+                </button>
+              </div>
+              <div className="col-span-2 grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Cartão Municipal (ID)</label>
+                  <input
+                    type="text"
+                    placeholder="Opcional"
+                    value={newPatient.municipalCardId}
+                    onChange={(e) => setNewPatient({ ...newPatient, municipalCardId: e.target.value })}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
+                  />
+                </div>
+                <div className="space-y-1 flex items-end">
+                  <div className="p-3 bg-slate-100 rounded-xl w-full text-center text-[10px] text-slate-400 font-bold uppercase italic border border-slate-200">
+                    Aguardando Leitura...
+                  </div>
+                </div>
+              </div>
+              <div className="col-span-2 mt-2">
+                <h5 className="text-[10px] font-black text-slate-900 uppercase">Contato de Emergência</h5>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Nome do Contato</label>
+                <input
+                  type="text"
+                  value={newPatient.emergencyContactName}
+                  onChange={(e) => setNewPatient({ ...newPatient, emergencyContactName: e.target.value })}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Telemóvel</label>
+                <input
+                  type="tel"
+                  value={newPatient.emergencyContactPhone}
+                  onChange={(e) => setNewPatient({ ...newPatient, emergencyContactPhone: e.target.value })}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
+                />
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full py-4 bg-emerald text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-emerald/90 transition-all disabled:opacity-50 shadow-lg shadow-emerald/20"
+          >
+            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <UserPlus className="w-5 h-5" />}
+            Cadastrar Paciente
+          </button>
+        </form>
+      </Modal>
+
+      {/* Digital Card Modal */}
+      <Modal
+        isOpen={isCardModalOpen}
+        onClose={() => setIsCardModalOpen(false)}
+        title="Cartão Digital do Paciente"
+      >
+        {patient && (
+          <div className="space-y-6">
+            <div id="digital-card" className="relative bg-gradient-to-br from-navy to-slate-800 p-8 rounded-3xl text-white overflow-hidden shadow-2xl">
+              {/* Decorative Elements */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl" />
+              <div className="absolute bottom-0 left-0 w-24 h-24 bg-emerald/10 rounded-full -ml-12 -mb-12 blur-xl" />
+              
+              <div className="relative flex justify-between items-start mb-8">
+                <div>
+                  <h4 className="text-xl font-black tracking-tighter italic">SISA ERP</h4>
+                  <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Sistema Integrado de Saúde</p>
+                </div>
+                <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center backdrop-blur-md">
+                  <QrCode className="w-6 h-6 text-emerald" />
+                </div>
+              </div>
+
+              <div className="relative flex gap-6 items-center">
+                <div className="w-24 h-24 rounded-2xl border-2 border-white/20 overflow-hidden bg-white/5">
+                  <img 
+                    src={`https://picsum.photos/seed/${patient.id}/200/200`} 
+                    alt="Patient" 
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold leading-tight">{patient.full_name}</h3>
+                  <p className="text-emerald font-mono text-sm mt-1">{patient.process_number}</p>
+                </div>
+              </div>
+
+              <div className="relative mt-8 grid grid-cols-2 gap-6 pt-6 border-t border-white/10">
+                <div>
+                  <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">B.I. / Documento</p>
+                  <p className="font-bold text-sm">{patient.bi_number || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Tipo de Sangue</p>
+                  <p className="font-bold text-sm">{patient.blood_type || 'Desconhecido'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Província</p>
+                  <p className="font-bold text-sm">{patient.province || 'Luanda'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Validade</p>
+                  <p className="font-bold text-sm">Indeterminada</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button 
+                onClick={handlePrint}
+                className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-200 transition-all font-sans"
+              >
+                <Printer className="w-5 h-5" />
+                Imprimir Cartão
+              </button>
+              <button 
+                onClick={handleDownload}
+                className="flex-1 py-4 bg-navy text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-navy/90 transition-all font-sans"
+              >
+                <Download className="w-5 h-5" />
+                Baixar PDF
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
