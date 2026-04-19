@@ -30,9 +30,9 @@ CREATE TABLE IF NOT EXISTS patients (
   district TEXT,
   financing_type TEXT,
   insurer TEXT,
-  blood_type TEXT,
+  tipo_sanguineo TEXT,
   alergias TEXT[], -- Array of allergies
-  chronic_diseases TEXT[], -- Array of chronic diseases
+  doencas_cronicas TEXT[], -- Array of chronic diseases
   emergency_contact_name TEXT,
   emergency_contact_phone TEXT,
   fingerprint_id TEXT UNIQUE, -- ID da biometria

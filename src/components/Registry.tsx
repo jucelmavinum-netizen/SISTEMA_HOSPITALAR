@@ -41,7 +41,7 @@ export default function Registry() {
     biNumber: '',
     birthDate: '',
     gender: 'M',
-    bloodType: 'Desconhecido',
+    tipoSanguineo: 'Desconhecido',
     alergias: '',
     financingType: 'Público',
     emergencyContactName: '',
@@ -64,7 +64,7 @@ export default function Registry() {
           bi_number: newPatient.biNumber,
           birth_date: newPatient.birthDate,
           gender: newPatient.gender,
-          blood_type: newPatient.bloodType,
+          tipo_sanguineo: newPatient.tipoSanguineo,
           alergias: newPatient.alergias ? [newPatient.alergias] : [],
           financing_type: newPatient.financingType,
           emergency_contact_name: newPatient.emergencyContactName,
@@ -514,8 +514,8 @@ export default function Registry() {
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-slate-400 uppercase">Tipo Sanguíneo</label>
               <select
-                value={newPatient.bloodType}
-                onChange={(e) => setNewPatient({ ...newPatient, bloodType: e.target.value })}
+                value={newPatient.tipoSanguineo}
+                onChange={(e) => setNewPatient({ ...newPatient, tipoSanguineo: e.target.value })}
                 className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
               >
                 <option value="Desconhecido">Desconhecido</option>
@@ -658,7 +658,7 @@ export default function Registry() {
                 </div>
                 <div>
                   <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Tipo de Sangue</p>
-                  <p className="font-bold text-sm">{patient.blood_type || 'Desconhecido'}</p>
+                  <p className="font-bold text-sm">{patient.tipo_sanguineo || 'Desconhecido'}</p>
                 </div>
                 <div>
                   <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Província</p>

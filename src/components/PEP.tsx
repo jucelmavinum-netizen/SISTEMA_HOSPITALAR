@@ -248,7 +248,7 @@ export default function PEP() {
               <div className="space-y-4 pt-4 border-t border-slate-100 text-sm">
                 <div>
                   <p className="text-[10px] uppercase font-bold text-slate-400">Tipo Sanguíneo</p>
-                  <p className="font-bold text-red-600">{patient.blood_type || 'Desconhecido'}</p>
+                  <p className="font-bold text-red-600">{patient.tipo_sanguineo || 'Desconhecido'}</p>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase font-bold text-slate-400">Alergias</p>

@@ -9,8 +9,9 @@ export interface Patient {
   isTemporary?: boolean;
   qrCode?: string;
   contact?: string;
-  bloodType?: string;
+  tipo_sanguineo?: string;
   alergias?: string[];
+  doencas_cronicas?: string[];
 }
 
 export interface Appointment {
