@@ -12,6 +12,8 @@ export interface Patient {
   tipo_sanguineo?: string;
   alergias?: string[];
   doencas_cronicas?: string[];
+  contato_emergencia_nome?: string;
+  contato_emergencia_telefone?: string;
 }
 
 export interface Appointment {

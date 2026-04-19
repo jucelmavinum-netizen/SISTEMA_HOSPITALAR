@@ -43,6 +43,7 @@ export default function Registry() {
     gender: 'M',
     tipoSanguineo: 'Desconhecido',
     alergias: '',
+    doencasCronicas: '',
     financingType: 'Público',
     emergencyContactName: '',
     emergencyContactPhone: '',
@@ -66,9 +67,10 @@ export default function Registry() {
           gender: newPatient.gender,
           tipo_sanguineo: newPatient.tipoSanguineo,
           alergias: newPatient.alergias ? [newPatient.alergias] : [],
+          doencas_cronicas: newPatient.doencasCronicas ? [newPatient.doencasCronicas] : [],
           financing_type: newPatient.financingType,
-          emergency_contact_name: newPatient.emergencyContactName,
-          emergency_contact_phone: newPatient.emergencyContactPhone,
+          contato_emergencia_nome: newPatient.emergencyContactName,
+          contato_emergencia_telefone: newPatient.emergencyContactPhone,
           fingerprint_id: newPatient.fingerprintId || null,
           municipal_card_id: newPatient.municipalCardId || null,
           process_number: processNumber,
@@ -536,6 +538,16 @@ export default function Registry() {
                 placeholder="Ex: Penicilina, Dipirona"
                 value={newPatient.alergias}
                 onChange={(e) => setNewPatient({ ...newPatient, alergias: e.target.value })}
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
+              />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Doenças Crônicas</label>
+              <input
+                type="text"
+                placeholder="Ex: Hipertensão, Diabetes"
+                value={newPatient.doencasCronicas}
+                onChange={(e) => setNewPatient({ ...newPatient, doencasCronicas: e.target.value })}
                 className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald"
               />
             </div>

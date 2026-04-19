@@ -258,8 +258,8 @@ export default function PEP() {
                 </div>
                 <div>
                   <p className="text-[10px] uppercase font-bold text-slate-400">Contato Emergência</p>
-                  <p className="font-bold text-slate-700">{patient.emergency_contact_name || '-'}</p>
-                  <p className="text-xs text-slate-500">{patient.emergency_contact_phone || ''}</p>
+                  <p className="font-bold text-slate-700">{patient.contato_emergencia_nome || '-'}</p>
+                  <p className="text-xs text-slate-500">{patient.contato_emergencia_telefone || ''}</p>
                 </div>
               </div>
             </div>
