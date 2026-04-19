@@ -10,7 +10,11 @@ import {
   CheckCircle2,
   AlertCircle,
   Hash,
-  Globe
+  Globe,
+  PlusCircle,
+  Phone,
+  Droplets,
+  AlertTriangle
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -118,6 +122,12 @@ export default function PatientAdmission() {
           district: formData.district,
           financing_type: formData.financing,
           insurer: formData.insurer || null,
+          tipo_sanguineo: formData.bloodType,
+          alergias: formData.allergies ? [formData.allergies] : [],
+          doencas_cronicas: formData.chronicDiseases ? [formData.chronicDiseases] : [],
+          contato_emergencia_nome: formData.emergencyContactName,
+          contato_emergencia_telefone: formData.emergencyContactPhone,
+          municipal_card_id: formData.municipalCardId || null,
           created_by: user?.id
         }]);
 
@@ -135,7 +145,13 @@ export default function PatientAdmission() {
         financing: 'public',
         insurer: '',
         birthDate: '',
-        gender: 'M'
+        gender: 'M',
+        bloodType: 'Desconhecido',
+        allergies: '',
+        chronicDiseases: '',
+        emergencyContactName: '',
+        emergencyContactPhone: '',
+        municipalCardId: ''
       });
       setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
@@ -225,6 +241,21 @@ export default function PatientAdmission() {
                 placeholder={formData.docType === 'bi' ? "Ex: 001234567LA041" : "Número do documento"}
               />
               {errors.docNumber && <p className="text-xs text-red-500 mt-1 font-bold">{errors.docNumber}</p>}
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Cartão Municipal (Opcional)</label>
+              <div className="relative">
+                <FileText className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
+                <input 
+                  type="text" 
+                  name="municipalCardId"
+                  value={formData.municipalCardId}
+                  onChange={handleInputChange}
+                  className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald transition-all font-medium"
+                  placeholder="ID do Cartão Munícipe"
+                />
+              </div>
             </div>
 
             <div>
@@ -373,6 +404,104 @@ export default function PatientAdmission() {
                 </select>
               </motion.div>
             )}
+          </div>
+        </section>
+
+        {/* Clinical Info Section */}
+        <section className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="p-2 bg-red-50 rounded-lg">
+              <Droplets className="w-5 h-5 text-red-600" />
+            </div>
+            <h2 className="text-xl font-bold text-slate-900">Informações Clínicas</h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Tipo Sanguíneo</label>
+              <select 
+                name="bloodType"
+                value={formData.bloodType}
+                onChange={handleInputChange}
+                className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald transition-all font-medium"
+              >
+                <option value="Desconhecido">Desconhecido</option>
+                <option value="A+">A+</option>
+                <option value="A-">A-</option>
+                <option value="B+">B+</option>
+                <option value="B-">B-</option>
+                <option value="AB+">AB+</option>
+                <option value="AB-">AB-</option>
+                <option value="O+">O+</option>
+                <option value="O-">O-</option>
+              </select>
+            </div>
+
+            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Alergias Conhecidas</label>
+                <div className="relative">
+                  <AlertTriangle className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
+                  <input 
+                    type="text" 
+                    name="allergies"
+                    value={formData.allergies}
+                    onChange={handleInputChange}
+                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald transition-all font-medium"
+                    placeholder="Ex: Penicilina, Dipirona"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Doenças Crônicas</label>
+                <div className="relative">
+                  <PlusCircle className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
+                  <input 
+                    type="text" 
+                    name="chronicDiseases"
+                    value={formData.chronicDiseases}
+                    onChange={handleInputChange}
+                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald transition-all font-medium"
+                    placeholder="Ex: Diabetes, Hipertensão"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Emergency Contact */}
+        <section className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="p-2 bg-purple-50 rounded-lg">
+              <Phone className="w-5 h-5 text-purple-600" />
+            </div>
+            <h2 className="text-xl font-bold text-slate-900">Contato de Emergência</h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Nome do Contato</label>
+              <input 
+                type="text" 
+                name="emergencyContactName"
+                value={formData.emergencyContactName}
+                onChange={handleInputChange}
+                className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald transition-all font-medium"
+                placeholder="Ex: Maria João (Mãe)"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Telemóvel de Emergência</label>
+              <input 
+                type="tel" 
+                name="emergencyContactPhone"
+                value={formData.emergencyContactPhone}
+                onChange={handleInputChange}
+                className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald transition-all font-medium"
+                placeholder="Ex: 923 000 000"
+              />
+            </div>
           </div>
         </section>
 

@@ -28,12 +28,18 @@ export default function PEP() {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [patient, setPatient] = React.useState<any>(null);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [searchResults, setSearchResults] = React.useState<any[]>([]);
+  const [isSearchModalOpen, setIsSearchModalOpen] = React.useState(false);
+  
   const [clinicalData, setClinicalData] = React.useState<any>({
     consultations: [],
     evolutions: [],
     prescriptions: [],
     dispensations: []
   });
+
+  const [currentEvolutionId, setCurrentEvolutionId] = React.useState<string | null>(null);
 
   const [inventory, setInventory] = React.useState<any[]>([]);
   const [isAdministering, setIsAdministering] = React.useState(false);
@@ -52,21 +58,43 @@ export default function PEP() {
 
   const [newMed, setNewMed] = React.useState({ name: '', dosage: '', frequency: '' });
 
-  const handleSearch = async () => {
-    if (!searchTerm) return;
+  const handleSearch = async (termToSearch = searchTerm) => {
+    if (!termToSearch) return;
     setIsLoading(true);
-    setPatient(null);
+    setError(null);
 
     try {
-      const { data: patientData, error: pError } = await supabase
+      const { data: results, error: pError } = await supabase
         .from('patients')
         .select('*')
-        .or(`bi_number.eq.${searchTerm},process_number.eq.${searchTerm}`)
-        .single();
+        .or(`bi_number.eq.${termToSearch},process_number.eq.${termToSearch},full_name.ilike.%${termToSearch}%`);
 
       if (pError) throw pError;
-      setPatient(patientData);
 
+      if (!results || results.length === 0) {
+        alert('Nenhum paciente encontrado com este termo.');
+        return;
+      }
+
+      if (results.length === 1) {
+        selectPatient(results[0]);
+      } else {
+        setSearchResults(results);
+        setIsSearchModalOpen(true);
+      }
+    } catch (err: any) {
+      alert('Erro na busca: ' + err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const selectPatient = async (patientData: any) => {
+    setPatient(patientData);
+    setIsSearchModalOpen(false);
+    setIsLoading(true);
+
+    try {
       // Fetch all clinical data
       const [cons, evol, presc, disp, inv] = await Promise.all([
         supabase.from('consultations').select('*').eq('patient_id', patientData.id).order('created_at', { ascending: false }),
@@ -76,16 +104,32 @@ export default function PEP() {
         supabase.from('inventory').select('*').gt('quantity', 0)
       ]);
 
+      const evolutions = evol.data || [];
       setClinicalData({
         consultations: cons.data || [],
-        evolutions: evol.data || [],
+        evolutions: evolutions,
         prescriptions: presc.data || [],
         dispensations: disp.data || []
       });
       setInventory(inv.data || []);
 
+      // Check for today's evolution
+      const today = new Date().toISOString().split('T')[0];
+      const todayEvol = evolutions.find(e => e.created_at.startsWith(today));
+      if (todayEvol) {
+        setCurrentEvolutionId(todayEvol.id);
+        setFormData(prev => ({ 
+          ...prev, 
+          evolutionNotes: todayEvol.notes,
+          conditionStatus: todayEvol.condition_status
+        }));
+      } else {
+        setCurrentEvolutionId(null);
+        setFormData(prev => ({ ...prev, evolutionNotes: '', conditionStatus: 'stable' }));
+      }
+
     } catch (err: any) {
-      alert('Paciente não encontrado: ' + err.message);
+      alert('Erro ao carregar prontuário: ' + err.message);
     } finally {
       setIsLoading(false);
     }
@@ -95,10 +139,13 @@ export default function PEP() {
     if (!patient) return;
     setIsLoading(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
       const { data: consData, error: consError } = await supabase
         .from('consultations')
         .insert([{
           patient_id: patient.id,
+          doctor_id: user?.id,
           symptoms: formData.symptoms,
           diagnosis: formData.diagnosis,
           notes: formData.notes
@@ -114,16 +161,28 @@ export default function PEP() {
           .insert([{
             consultation_id: consData.id,
             patient_id: patient.id,
-            medications: formData.medications
+            doctor_id: user?.id,
+            medications: formData.medications,
+            status: 'active'
           }]);
         if (prescError) throw prescError;
       }
 
-      alert('Consulta salva com sucesso!');
-      handleSearch(); // Refresh
+      alert('Consulta finalizada e assinada digitalmente com sucesso!');
+      
+      // Reset consultation form data
+      setFormData(prev => ({
+        ...prev,
+        symptoms: '',
+        diagnosis: '',
+        notes: '',
+        medications: []
+      }));
+      
+      selectPatient(patient); // Refresh
       setActiveSubTab('history');
     } catch (err: any) {
-      alert('Erro ao salvar: ' + err.message);
+      alert('Erro ao salvar consulta: ' + err.message);
     } finally {
       setIsLoading(false);
     }
@@ -133,17 +192,35 @@ export default function PEP() {
     if (!patient) return;
     setIsLoading(true);
     try {
-      const { error } = await supabase
-        .from('clinical_evolutions')
-        .insert([{
-          patient_id: patient.id,
-          notes: formData.evolutionNotes,
-          condition_status: formData.conditionStatus
-        }]);
+      const { data: { user } } = await supabase.auth.getUser();
 
-      if (error) throw error;
-      alert('Evolução registrada!');
-      handleSearch();
+      if (currentEvolutionId) {
+        // Update today's evolution
+        const { error } = await supabase
+          .from('clinical_evolutions')
+          .update({
+            notes: formData.evolutionNotes,
+            condition_status: formData.conditionStatus,
+            doctor_id: user?.id
+          })
+          .eq('id', currentEvolutionId);
+        if (error) throw error;
+        alert('Evolução diária atualizada!');
+      } else {
+        // Create new evolution
+        const { error } = await supabase
+          .from('clinical_evolutions')
+          .insert([{
+            patient_id: patient.id,
+            doctor_id: user?.id,
+            notes: formData.evolutionNotes,
+            condition_status: formData.conditionStatus
+          }]);
+        if (error) throw error;
+        alert('Evolução diária registrada com sucesso!');
+      }
+
+      selectPatient(patient);
       setActiveSubTab('history');
     } catch (err: any) {
       alert('Erro ao salvar evolução: ' + err.message);
@@ -206,11 +283,11 @@ export default function PEP() {
 
       {/* Patient Search */}
       <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex gap-4">
-        <div className="relative flex-1">
+            <div className="relative flex-1">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
           <input 
             type="text" 
-            placeholder="Pesquisar por BI ou Nº de Processo..."
+            placeholder="Pesquisar por Nome, BI ou Nº de Processo..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -328,7 +405,7 @@ export default function PEP() {
                     </h3>
                     <div className="space-y-3">
                       {clinicalData.evolutions.map((e: any) => (
-                        <div key={e.id} className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100 flex gap-4">
+                        <div key={e.id} className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100 flex gap-4 relative group">
                           <div className={cn(
                             "w-2 shrink-0 rounded-full",
                             e.condition_status === 'improving' ? 'bg-emerald-500' :
@@ -338,6 +415,20 @@ export default function PEP() {
                             <p className="text-sm font-medium text-slate-700">{e.notes}</p>
                             <span className="text-[10px] text-slate-400 uppercase font-black">{new Date(e.created_at).toLocaleString()}</span>
                           </div>
+                          <button 
+                            onClick={() => {
+                              setFormData(prev => ({ 
+                                ...prev, 
+                                evolutionNotes: e.notes,
+                                conditionStatus: e.condition_status
+                              }));
+                              setCurrentEvolutionId(e.id);
+                              setActiveSubTab('evolution');
+                            }}
+                            className="absolute right-4 top-4 p-2 bg-white rounded-lg border border-slate-200 opacity-0 group-hover:opacity-100 transition-all text-blue-600 hover:bg-blue-50"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -488,7 +579,7 @@ export default function PEP() {
                        className="w-full py-4 bg-navy text-white rounded-2xl font-bold hover:shadow-lg transition-all flex items-center justify-center gap-2 mt-8 disabled:opacity-70"
                      >
                         {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Save className="w-6 h-6" />}
-                        Salvar Registro de Evolução
+                        {currentEvolutionId ? 'Atualizar Evolução do Dia' : 'Salvar Registro de Evolução'}
                      </button>
                    </div>
                 </div>
@@ -652,9 +743,40 @@ export default function PEP() {
              <Stethoscope className="w-10 h-10 text-emerald" />
           </div>
           <h2 className="text-2xl font-bold text-slate-900 italic">Inicie o Atendimento Clínico</h2>
-          <p className="text-slate-500 max-w-md mx-auto">Insira o B.I. ou Número de Processo acima para abrir o prontuário eletrônico completo do paciente.</p>
+          <p className="text-slate-500 max-w-md mx-auto">Insira o Nome, B.I. ou Número de Processo acima para abrir o prontuário eletrônico completo do paciente.</p>
         </div>
       )}
+
+      {/* Patient Selection Modal */}
+      <Modal
+        isOpen={isSearchModalOpen}
+        onClose={() => setIsSearchModalOpen(false)}
+        title="Selecione o Paciente"
+      >
+        <div className="space-y-3">
+          {searchResults.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => selectPatient(p)}
+              className="w-full p-4 bg-slate-50 hover:bg-emerald/5 border border-slate-100 hover:border-emerald rounded-2xl text-left flex items-center gap-4 transition-all group"
+            >
+              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center border border-slate-200 group-hover:border-emerald/30 overflow-hidden">
+                <img 
+                  src={`https://picsum.photos/seed/${p.id}/100/100`} 
+                  alt={p.full_name} 
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div>
+                <p className="font-bold text-slate-900">{p.full_name}</p>
+                <p className="text-xs text-slate-500">BI: {p.bi_number} | Processo: {p.process_number}</p>
+              </div>
+              <ChevronRight className="w-5 h-5 ml-auto text-slate-300 group-hover:text-emerald" />
+            </button>
+          ))}
+        </div>
+      </Modal>
     </div>
   );
 }

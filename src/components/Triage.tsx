@@ -10,7 +10,10 @@ import {
   ArrowRight,
   Search,
   Loader2,
-  User
+  User,
+  Edit2,
+  Trash2,
+  X
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -33,6 +36,8 @@ export default function Triage() {
   const [success, setSuccess] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [triagedPatients, setTriagedPatients] = React.useState<any[]>([]);
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [editingId, setEditingId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     fetchTriagedPatients();
@@ -96,31 +101,93 @@ export default function Triage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
-      const { error } = await supabase
-        .from('triage_records')
-        .insert([{
-          patient_id: patient.id,
-          classification: selectedColor,
-          vitals: vitals,
-          notes: notes,
-          nurse_id: user?.id
-        }]);
+      if (isEditing && editingId) {
+        const { error } = await supabase
+          .from('triage_records')
+          .update({
+            classification: selectedColor,
+            vitals: vitals,
+            notes: notes,
+            nurse_id: user?.id
+          })
+          .eq('id', editingId);
+        
+        if (error) throw error;
+      } else {
+        // Check for duplicate in current active triage list
+        const isAlreadyTriaged = triagedPatients.find(t => t.patient_id === patient.id);
+        if (isAlreadyTriaged) {
+          throw new Error('Este paciente já se encontra na lista de triagem. Ele deve ser liberado ou o registro atual deve ser excluído antes de uma nova triagem.');
+        }
 
-      if (error) throw error;
+        const { error } = await supabase
+          .from('triage_records')
+          .insert([{
+            patient_id: patient.id,
+            classification: selectedColor,
+            vitals: vitals,
+            notes: notes,
+            nurse_id: user?.id
+          }]);
+
+        if (error) throw error;
+      }
 
       setSuccess(true);
-      // Reset form
-      setPatient(null);
-      setSearchTerm('');
-      setSelectedColor(null);
-      setNotes('');
-      setVitals({ temp: '', bp: '', hr: '', o2: '' });
+      resetForm();
+      fetchTriagedPatients();
       setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
       setError('Erro ao salvar triagem: ' + err.message);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleDelete = async (id: string) => {
+    // Avoid window.confirm if possible, but for critical delete it's often used.
+    // I'll add a state-based error/success feedback.
+    setError(null);
+    
+    try {
+      const { error } = await supabase
+        .from('triage_records')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      setSuccess(true);
+      fetchTriagedPatients();
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err: any) {
+      setError('Erro ao eliminar triagem: ' + err.message);
+    }
+  };
+
+  const handleEdit = (record: any) => {
+    setIsEditing(true);
+    setEditingId(record.id);
+    setPatient(record.patients);
+    setSelectedColor(record.classification);
+    setNotes(record.notes || '');
+    setVitals({
+      temp: record.vitals?.temp || '',
+      bp: record.vitals?.bp || '',
+      hr: record.vitals?.hr || '',
+      o2: record.vitals?.o2 || ''
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const resetForm = () => {
+    setPatient(null);
+    setSearchTerm('');
+    setSelectedColor(null);
+    setNotes('');
+    setVitals({ temp: '', bp: '', hr: '', o2: '' });
+    setIsEditing(false);
+    setEditingId(null);
   };
 
   const colors: { id: TriageColor; label: string; time: string; colorClass: string }[] = [
@@ -141,19 +208,28 @@ export default function Triage() {
         <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-100 rounded-2xl">
           <AlertCircle className="w-6 h-6 text-red-600" />
           <div>
-            <p className="text-xs font-bold text-red-600 uppercase">Emergência Crítica?</p>
-            <button 
-              onClick={async () => {
-                if (!patient && searchTerm) {
-                  await handleSearch();
-                }
-                setSelectedColor('red');
-                setNotes('ENCAMINHAMENTO IMEDIATO - EMERGÊNCIA CRÍTICA');
-              }}
-              className="text-sm font-bold text-red-700 hover:underline flex items-center gap-1"
-            >
-              Encaminhamento Imediato <Zap className="w-4 h-4 fill-current" />
-            </button>
+            <p className="text-xs font-bold text-red-600 uppercase">{isEditing ? 'Modo de Edição Ativo' : 'Emergência Crítica?'}</p>
+            {isEditing ? (
+              <button 
+                onClick={resetForm}
+                className="text-sm font-bold text-red-700 hover:underline flex items-center gap-1"
+              >
+                Cancelar Edição <X className="w-4 h-4" />
+              </button>
+            ) : (
+              <button 
+                onClick={async () => {
+                  if (!patient && searchTerm) {
+                    await handleSearch();
+                  }
+                  setSelectedColor('red');
+                  setNotes('ENCAMINHAMENTO IMEDIATO - EMERGÊNCIA CRÍTICA');
+                }}
+                className="text-sm font-bold text-red-700 hover:underline flex items-center gap-1"
+              >
+                Encaminhamento Imediato <Zap className="w-4 h-4 fill-current" />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -298,16 +374,10 @@ export default function Triage() {
 
             <div className="mt-8 flex gap-4">
               <button 
-                onClick={() => {
-                  setPatient(null);
-                  setSearchTerm('');
-                  setSelectedColor(null);
-                  setNotes('');
-                  setVitals({ temp: '', bp: '', hr: '', o2: '' });
-                }}
+                onClick={resetForm}
                 className="flex-1 bg-slate-100 text-slate-600 py-4 rounded-2xl font-bold hover:bg-slate-200 transition-all"
               >
-                Limpar Formulário
+                {isEditing ? 'Cancelar' : 'Limpar Formulário'}
               </button>
               <button 
                 onClick={handleSubmit}
@@ -321,7 +391,7 @@ export default function Triage() {
               >
                 {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : (
                   <>
-                    Finalizar Triagem e Encaminhar
+                    {isEditing ? 'Atualizar Triagem' : 'Finalizar Triagem e Encaminhar'}
                     <ArrowRight className="w-5 h-5" />
                   </>
                 )}
@@ -344,11 +414,12 @@ export default function Triage() {
                 <th className="px-6 py-4">Classificação</th>
                 <th className="px-6 py-4">Sinais Vitais</th>
                 <th className="px-6 py-4">Data/Hora</th>
+                <th className="px-6 py-4 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {triagedPatients.length > 0 ? triagedPatients.map((record) => (
-                <tr key={record.id} className="hover:bg-slate-50 transition-colors">
+                <tr key={record.id} className="hover:bg-slate-50 transition-colors group">
                   <td className="px-6 py-4">
                     <p className="text-sm font-bold text-slate-900">{record.patients?.full_name}</p>
                     <p className="text-[10px] text-slate-400">Proc: {record.patients?.process_number}</p>
@@ -374,6 +445,24 @@ export default function Triage() {
                   </td>
                   <td className="px-6 py-4 text-xs text-slate-400">
                     {new Date(record.created_at).toLocaleString()}
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex justify-end gap-2">
+                      <button 
+                        onClick={() => handleEdit(record)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Editar"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(record.id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Eliminar"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )) : (
