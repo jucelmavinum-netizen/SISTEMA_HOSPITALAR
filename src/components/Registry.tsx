@@ -12,6 +12,7 @@ import {
   Loader2,
   AlertCircle,
   Printer,
+  ClipboardList,
   Edit2,
   X
 } from 'lucide-react';
@@ -20,7 +21,7 @@ import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 import Modal from './ui/Modal';
 
-export default function Registry() {
+export default function Registry({ setActiveTab }: { setActiveTab?: (tab: string) => void }) {
   const [searchType, setSearchType] = React.useState<'bi' | 'card' | 'fingerprint'>('bi');
   const [searchTerm, setSearchTerm] = React.useState('');
   const [patient, setPatient] = React.useState<any>(null);
@@ -487,19 +488,23 @@ export default function Registry() {
                           </button>
                           <button 
                             onClick={() => {
-                              setPatient(p);
-                              // Fetch history for selected patient
-                              supabase
-                                .from('triage_records')
-                                .select('*')
-                                .eq('patient_id', p.id)
-                                .order('created_at', { ascending: false })
-                                .then(({ data }) => setClinicalHistory(data || []));
+                              if (setActiveTab) {
+                                localStorage.setItem('pep_search_term', p.process_number);
+                                setActiveTab('pep');
+                              } else {
+                                setPatient(p);
+                                supabase
+                                  .from('triage_records')
+                                  .select('*')
+                                  .eq('patient_id', p.id)
+                                  .order('created_at', { ascending: false })
+                                  .then(({ data }) => setClinicalHistory(data || []));
+                              }
                             }}
                             className="p-2 hover:bg-emerald/10 text-emerald rounded-lg transition-all"
-                            title="Ver Prontuário"
+                            title="Ver Prontuário Completo"
                           >
-                            <ExternalLink className="w-4 h-4" />
+                            <ClipboardList className="w-4 h-4" />
                           </button>
                         </div>
                       </td>

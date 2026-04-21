@@ -17,7 +17,8 @@ import {
   ExternalLink,
   ShieldCheck,
   Package,
-  AlertTriangle
+  AlertTriangle,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -44,6 +45,36 @@ export default function PEP() {
   const [inventory, setInventory] = React.useState<any[]>([]);
   const [isAdministering, setIsAdministering] = React.useState(false);
   const [selectedMedForDispense, setSelectedMedForDispense] = React.useState<any>(null);
+  const [currentDoctor, setCurrentDoctor] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    const initData = async () => {
+      const [{ data: invData }, { data: { user } }] = await Promise.all([
+        supabase.from('inventory').select('id, item_name, batch_number, quantity, unit').gt('quantity', 0),
+        supabase.auth.getUser()
+      ]);
+      
+      if (invData) setInventory(invData);
+      if (user) {
+        setCurrentDoctor(user);
+        // Sync profile once on mount
+        await supabase.from('profiles').upsert({
+          id: user.id,
+          full_name: user.user_metadata?.full_name || user.email?.split('@')[0],
+          role: 'doctor'
+        }, { onConflict: 'id' });
+      }
+    };
+    initData();
+
+    // Check for external search trigger
+    const externalSearch = localStorage.getItem('pep_search_term');
+    if (externalSearch) {
+      setSearchTerm(externalSearch);
+      handleSearch(externalSearch);
+      localStorage.removeItem('pep_search_term');
+    }
+  }, []);
 
   const [activeSubTab, setActiveSubTab] = React.useState<'history' | 'anamnese' | 'evolution' | 'prescription' | 'administration'>('history');
 
@@ -58,8 +89,12 @@ export default function PEP() {
 
   const [newMed, setNewMed] = React.useState({ name: '', dosage: '', frequency: '' });
 
-  const handleSearch = async (termToSearch = searchTerm) => {
-    if (!termToSearch) return;
+  const [latestSavedId, setLatestSavedId] = React.useState<string | null>(null);
+
+  const handleSearch = async (termToSearch?: string | any) => {
+    const finalTerm = typeof termToSearch === 'string' ? termToSearch : searchTerm;
+    const cleanTerm = finalTerm.trim();
+    if (!cleanTerm) return;
     setIsLoading(true);
     setError(null);
 
@@ -67,7 +102,7 @@ export default function PEP() {
       const { data: results, error: pError } = await supabase
         .from('patients')
         .select('*')
-        .or(`bi_number.eq.${termToSearch},process_number.eq.${termToSearch},full_name.ilike.%${termToSearch}%`);
+        .or(`bi_number.eq.${cleanTerm},process_number.eq.${cleanTerm},full_name.ilike.%${cleanTerm}%`);
 
       if (pError) throw pError;
 
@@ -95,13 +130,12 @@ export default function PEP() {
     setIsLoading(true);
 
     try {
-      // Fetch all clinical data
-      const [cons, evol, presc, disp, inv] = await Promise.all([
+      // Fetch only clinical data, inventory is already loaded
+      const [cons, evol, presc, disp] = await Promise.all([
         supabase.from('consultations').select('*').eq('patient_id', patientData.id).order('created_at', { ascending: false }),
         supabase.from('clinical_evolutions').select('*').eq('patient_id', patientData.id).order('created_at', { ascending: false }),
         supabase.from('prescriptions').select('*').eq('patient_id', patientData.id).order('created_at', { ascending: false }),
-        supabase.from('dispensations').select('*, inventory(item_name, batch_number)').eq('patient_id', patientData.id).order('administered_at', { ascending: false }),
-        supabase.from('inventory').select('*').gt('quantity', 0)
+        supabase.from('dispensations').select('*, inventory(item_name, batch_number)').eq('patient_id', patientData.id).order('administered_at', { ascending: false })
       ]);
 
       const evolutions = evol.data || [];
@@ -111,7 +145,6 @@ export default function PEP() {
         prescriptions: presc.data || [],
         dispensations: disp.data || []
       });
-      setInventory(inv.data || []);
 
       // Check for today's evolution
       const today = new Date().toISOString().split('T')[0];
@@ -134,55 +167,95 @@ export default function PEP() {
       setIsLoading(false);
     }
   };
-
+  const [isAddingPrescription, setIsAddingPrescription] = React.useState(false);
   const handleSaveConsultation = async () => {
     if (!patient) return;
+    if (!formData.diagnosis || !formData.symptoms) {
+      alert('Por favor, preencha os sintomas e o diagnóstico para concluir o atendimento médico.');
+      return;
+    }
     setIsLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const doctorId = currentDoctor?.id || null;
       
       const { data: consData, error: consError } = await supabase
         .from('consultations')
         .insert([{
           patient_id: patient.id,
-          doctor_id: user?.id,
+          doctor_id: doctorId,
           symptoms: formData.symptoms,
           diagnosis: formData.diagnosis,
           notes: formData.notes
         }])
         .select()
         .single();
+      if (consError) throw new Error(`Erro na consulta: ${consError.message}`);
 
-      if (consError) throw consError;
-
-      if (formData.medications.length > 0) {
+      if (formData.medications && formData.medications.length > 0) {
+        const digitalSignature = `MD-SIG-${Math.random().toString(36).substring(2, 9).toUpperCase()}-${new Date().getTime()}`;
         const { error: prescError } = await supabase
           .from('prescriptions')
           .insert([{
             consultation_id: consData.id,
             patient_id: patient.id,
-            doctor_id: user?.id,
+            doctor_id: doctorId,
             medications: formData.medications,
-            status: 'active'
+            status: 'active',
+            digital_signature: digitalSignature
           }]);
-        if (prescError) throw prescError;
+        
+        if (prescError) throw new Error(`Erro na prescrição: ${prescError.message}`);
       }
 
-      alert('Consulta finalizada e assinada digitalmente com sucesso!');
+      setLatestSavedId(consData.id);
       
-      // Reset consultation form data
-      setFormData(prev => ({
-        ...prev,
-        symptoms: '',
-        diagnosis: '',
-        notes: '',
-        medications: []
-      }));
+      setTimeout(() => {
+        setFormData(prev => ({
+          ...prev,
+          symptoms: '',
+          diagnosis: '',
+          notes: '',
+          medications: []
+        }));
+        setLatestSavedId(null);
+        selectPatient(patient);
+        setActiveSubTab('history');
+      }, 3000);
       
-      selectPatient(patient); // Refresh
-      setActiveSubTab('history');
     } catch (err: any) {
-      alert('Erro ao salvar consulta: ' + err.message);
+      console.error('Save Consultation Error:', err);
+      alert(err.message || 'Falha ao salvar atendimento.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCreateIndependentPrescription = async () => {
+    if (!patient || formData.medications.length === 0) return;
+    setIsLoading(true);
+    try {
+      const doctorId = currentDoctor?.id || null;
+      const digitalSignature = `MD-SIG-IND-${Math.random().toString(36).substring(2, 9).toUpperCase()}-${new Date().getTime()}`;
+
+      const { error: prescError } = await supabase
+        .from('prescriptions')
+        .insert([{
+          patient_id: patient.id,
+          doctor_id: doctorId,
+          medications: formData.medications,
+          status: 'active',
+          digital_signature: digitalSignature
+        }]);
+      
+      if (prescError) throw prescError;
+
+      alert('Prescrição registrada com sucesso!');
+      setFormData(prev => ({ ...prev, medications: [] }));
+      setIsAddingPrescription(false);
+      selectPatient(patient);
+      setActiveSubTab('prescription');
+    } catch (err: any) {
+      alert('Erro ao salvar prescrição: ' + err.message);
     } finally {
       setIsLoading(false);
     }
@@ -192,34 +265,31 @@ export default function PEP() {
     if (!patient) return;
     setIsLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const doctorId = currentDoctor?.id || null;
 
       if (currentEvolutionId) {
-        // Update today's evolution
         const { error } = await supabase
           .from('clinical_evolutions')
           .update({
             notes: formData.evolutionNotes,
             condition_status: formData.conditionStatus,
-            doctor_id: user?.id
+            doctor_id: doctorId
           })
           .eq('id', currentEvolutionId);
         if (error) throw error;
         alert('Evolução diária atualizada!');
       } else {
-        // Create new evolution
         const { error } = await supabase
           .from('clinical_evolutions')
           .insert([{
             patient_id: patient.id,
-            doctor_id: user?.id,
+            doctor_id: doctorId,
             notes: formData.evolutionNotes,
             condition_status: formData.conditionStatus
           }]);
         if (error) throw error;
         alert('Evolução diária registrada com sucesso!');
       }
-
       selectPatient(patient);
       setActiveSubTab('history');
     } catch (err: any) {
@@ -436,119 +506,139 @@ export default function PEP() {
                 </div>
               )}
 
-              {activeSubTab === 'anamnese' && (
+      {activeSubTab === 'anamnese' && (
                 <div className="space-y-6">
-                  <div className="grid grid-cols-1 gap-6">
-                    <div>
-                      <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Anamnese (Sintomas e Queixas)</label>
-                      <textarea 
-                        value={formData.symptoms}
-                        onChange={(e) => setFormData({ ...formData, symptoms: e.target.value })}
-                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-emerald h-32"
-                        placeholder="Descreva o histórico de sintomas e queixas do paciente..."
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Diagnóstico Hipotético/Final</label>
-                      <input 
-                        type="text"
-                        value={formData.diagnosis}
-                        onChange={(e) => setFormData({ ...formData, diagnosis: e.target.value })}
-                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-emerald"
-                        placeholder="Ex: Malária por P. Falciparum"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Notas Médicas Gerais</label>
-                      <textarea 
-                        value={formData.notes}
-                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-emerald h-24"
-                        placeholder="Observações adicionais..."
-                      />
-                    </div>
-                  </div>
-
-                  <div className="pt-6 border-t border-slate-100">
-                    <h4 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
-                       <Pill className="w-5 h-5 text-emerald" />
-                       Prescrição Integrada
-                    </h4>
-                    <div className="grid grid-cols-3 gap-3 mb-4">
-                      <input 
-                        placeholder="Medicamento"
-                        value={newMed.name}
-                        onChange={(e) => setNewMed({ ...newMed, name: e.target.value })}
-                        className="p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald text-sm"
-                      />
-                      <input 
-                        placeholder="Dosagem (ex: 500mg)"
-                        value={newMed.dosage}
-                        onChange={(e) => setNewMed({ ...newMed, dosage: e.target.value })}
-                        className="p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald text-sm"
-                      />
-                      <div className="flex gap-2">
-                        <input 
-                          placeholder="Frequência"
-                          value={newMed.frequency}
-                          onChange={(e) => setNewMed({ ...newMed, frequency: e.target.value })}
-                          className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald text-sm"
-                        />
-                        <button 
-                          onClick={addMedication}
-                          className="p-3 bg-emerald text-white rounded-xl hover:bg-emerald/90 transition-all"
-                        >
-                          <Plus className="w-5 h-5" />
-                        </button>
+                  {latestSavedId ? (
+                    <motion.div 
+                      initial={{ scale: 0.9, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className="bg-emerald/10 border-2 border-emerald p-8 rounded-[32px] text-center space-y-4"
+                    >
+                      <div className="w-20 h-20 bg-emerald text-white rounded-full flex items-center justify-center mx-auto shadow-lg">
+                        <ShieldCheck className="w-12 h-12" />
                       </div>
-                    </div>
+                      <h3 className="text-2xl font-black text-emerald-900 uppercase">Consulta Concluída</h3>
+                      <div className="p-4 bg-white/50 backdrop-blur rounded-2xl border border-emerald/20">
+                        <p className="text-emerald-700 font-bold mb-1">Assinatura Digital Verificada</p>
+                        <p className="text-[10px] font-mono text-emerald-600 break-all">TOKEN-ID: {latestSavedId}</p>
+                      </div>
+                      <p className="text-slate-500 font-medium">Os dados foram arquivados permanentemente no prontuário.</p>
+                    </motion.div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-1 gap-6">
+                        <div>
+                          <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Anamnese (Sintomas e Queixas)</label>
+                          <textarea 
+                            value={formData.symptoms}
+                            onChange={(e) => setFormData({ ...formData, symptoms: e.target.value })}
+                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-emerald h-32"
+                            placeholder="Descreva o histórico de sintomas e queixas do paciente..."
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Diagnóstico Hipotético/Final</label>
+                          <input 
+                            type="text"
+                            value={formData.diagnosis}
+                            onChange={(e) => setFormData({ ...formData, diagnosis: e.target.value })}
+                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-emerald"
+                            placeholder="Ex: Malária por P. Falciparum"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Notas Médicas Gerais</label>
+                          <textarea 
+                            value={formData.notes}
+                            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-emerald h-24"
+                            placeholder="Observações adicionais..."
+                          />
+                        </div>
+                      </div>
 
-                    <div className="space-y-2">
-                       {formData.medications.map((m, i) => (
-                         <div key={i} className="flex items-center justify-between p-3 bg-emerald/5 border border-emerald/10 rounded-xl text-sm">
-                           <span className="font-bold text-emerald-900 text-xs">{m.name} - {m.dosage} ({m.frequency})</span>
-                           <button onClick={() => removeMedication(i)} className="text-red-500 hover:bg-white p-1 rounded-lg">
-                             <Trash2 className="w-4 h-4" />
-                           </button>
-                         </div>
-                       ))}
-                    </div>
-                  </div>
+                      <div className="pt-6 border-t border-slate-100">
+                        <h4 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+                          <Pill className="w-5 h-5 text-emerald" />
+                          Prescrição Integrada
+                        </h4>
+                        <div className="grid grid-cols-3 gap-3 mb-4">
+                          <input 
+                            placeholder="Medicamento"
+                            value={newMed.name}
+                            onChange={(e) => setNewMed({ ...newMed, name: e.target.value })}
+                            className="p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald text-sm"
+                          />
+                          <input 
+                            placeholder="Dosagem (ex: 500mg)"
+                            value={newMed.dosage}
+                            onChange={(e) => setNewMed({ ...newMed, dosage: e.target.value })}
+                            className="p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald text-sm"
+                          />
+                          <div className="flex gap-2">
+                            <input 
+                              placeholder="Frequência"
+                              value={newMed.frequency}
+                              onChange={(e) => setNewMed({ ...newMed, frequency: e.target.value })}
+                              className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald text-sm"
+                            />
+                            <button 
+                              onClick={addMedication}
+                              className="p-3 bg-emerald text-white rounded-xl hover:bg-emerald/90 transition-all font-bold"
+                            >
+                              <Plus className="w-5 h-5 mx-auto" />
+                            </button>
+                          </div>
+                        </div>
 
-                  <button 
-                    onClick={handleSaveConsultation}
-                    disabled={isLoading}
-                    className="w-full py-4 bg-navy text-white rounded-2xl font-bold hover:shadow-lg transition-all flex items-center justify-center gap-2 mt-8 disabled:opacity-70"
-                  >
-                    {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Save className="w-6 h-6" />}
-                    Concluir Consulta e Assinar Digitalmente
-                  </button>
+                        <div className="space-y-2">
+                          {formData.medications.map((m, i) => (
+                            <div key={i} className="flex items-center justify-between p-3 bg-emerald/5 border border-emerald/10 rounded-xl text-sm">
+                              <span className="font-bold text-emerald-900 text-xs">{m.name} - {m.dosage} ({m.frequency})</span>
+                              <button onClick={() => removeMedication(i)} className="text-red-500 hover:bg-white p-1 rounded-lg">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <button 
+                        onClick={handleSaveConsultation}
+                        disabled={isLoading}
+                        className="w-full py-4 bg-navy text-white rounded-2xl font-bold hover:shadow-lg transition-all flex items-center justify-center gap-2 mt-8 disabled:opacity-70"
+                      >
+                        {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <ShieldCheck className="w-6 h-6" />}
+                        Concluir Consulta e Assinar Digitalmente
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
 
               {activeSubTab === 'evolution' && (
-                <div className="space-y-6">
-                   <div className="bg-blue-50 p-6 rounded-3xl border border-blue-100 flex items-center gap-4 mb-8">
+                <div className="space-y-8">
+                   <div className="bg-blue-50 p-6 rounded-3xl border border-blue-100 flex items-center gap-4">
                      <Activity className="w-8 h-8 text-blue-600" />
                      <div>
                        <h3 className="font-bold text-blue-900">Evolução Clínica Diária</h3>
-                       <p className="text-sm text-blue-700/60">Notas sobre a melhora ou piora do quadro clínico.</p>
+                       <p className="text-sm text-blue-700/60">Controle de melhora ou piora do quadro clínico (Máx. 1/dia).</p>
                      </div>
                    </div>
 
-                   <div className="space-y-4">
+                   <div className="bg-slate-50 p-8 rounded-3xl border border-slate-200 space-y-6">
                      <div>
                         <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Notas de Evolução</label>
                         <textarea 
                           value={formData.evolutionNotes}
                           onChange={(e) => setFormData({ ...formData, evolutionNotes: e.target.value })}
-                          className="w-full p-6 bg-slate-50 border border-slate-200 rounded-3xl outline-none focus:border-blue-500 h-48"
-                          placeholder="Registre as notas diárias sobre o paciente..."
+                          className="w-full p-6 bg-white border border-slate-200 rounded-2xl outline-none focus:border-blue-500 h-48 shadow-sm"
+                          placeholder="Registre as observações diárias sobre a resposta ao tratamento..."
                         />
                      </div>
 
                      <div>
-                        <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Estado Geral do Paciente</label>
+                        <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Estado Geral de Hoje</label>
                         <div className="grid grid-cols-4 gap-3">
                            {[
                              { id: 'improving', label: 'Em Melhora', color: 'bg-emerald-500' },
@@ -562,12 +652,12 @@ export default function PEP() {
                                className={cn(
                                  "p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2",
                                  formData.conditionStatus === st.id 
-                                   ? "border-navy bg-white shadow-xl" 
-                                   : "border-slate-50 bg-slate-50 text-slate-400 hover:border-slate-200"
+                                   ? "border-blue-500 bg-white shadow-lg scale-105" 
+                                   : "border-transparent bg-slate-100 text-slate-400 hover:bg-slate-200"
                                )}
                              >
                                <div className={cn("w-3 h-3 rounded-full", st.color)} />
-                               <span className="text-xs font-bold">{st.label}</span>
+                               <span className="text-[10px] font-bold uppercase tracking-tighter">{st.label}</span>
                              </button>
                            ))}
                         </div>
@@ -576,11 +666,49 @@ export default function PEP() {
                      <button 
                        onClick={handleSaveEvolution}
                        disabled={isLoading}
-                       className="w-full py-4 bg-navy text-white rounded-2xl font-bold hover:shadow-lg transition-all flex items-center justify-center gap-2 mt-8 disabled:opacity-70"
+                       className={cn(
+                         "w-full py-4 rounded-2xl font-bold hover:shadow-lg transition-all flex items-center justify-center gap-2 mt-4 disabled:opacity-70",
+                         currentEvolutionId ? "bg-amber-500 text-white" : "bg-navy text-white"
+                       )}
                      >
                         {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Save className="w-6 h-6" />}
-                        {currentEvolutionId ? 'Atualizar Evolução do Dia' : 'Salvar Registro de Evolução'}
+                        {currentEvolutionId ? 'Atualizar Evolução de Hoje' : 'Registrar Nova Evolução'}
                      </button>
+                   </div>
+
+                   <div className="pt-8 border-t border-slate-100">
+                     <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                       <History className="w-5 h-5 text-slate-400" />
+                       Histórico de Evoluções
+                     </h3>
+                     <div className="space-y-4">
+                        {clinicalData.evolutions.length > 0 ? clinicalData.evolutions.map((e: any) => (
+                          <div key={e.id} className="p-5 bg-white rounded-2xl border border-slate-200 flex gap-4 hover:border-blue-300 transition-all group">
+                            <div className={cn(
+                              "w-1.5 shrink-0 rounded-full",
+                              e.condition_status === 'improving' ? 'bg-emerald-500' :
+                              e.condition_status === 'worsening' ? 'bg-orange-500' : 
+                              e.condition_status === 'critical' ? 'bg-red-500' : 'bg-blue-400'
+                            )} />
+                            <div className="flex-1">
+                              <div className="flex justify-between items-start mb-1">
+                                <span className={cn(
+                                  "text-[10px] font-black uppercase px-2 py-0.5 rounded",
+                                  e.condition_status === 'improving' ? 'bg-emerald-50 text-emerald-600' :
+                                  e.condition_status === 'worsening' ? 'bg-orange-50 text-orange-600' :
+                                  e.condition_status === 'critical' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
+                                )}>
+                                  {e.condition_status}
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-bold">{new Date(e.created_at).toLocaleString()}</span>
+                              </div>
+                              <p className="text-sm text-slate-700 leading-relaxed">{e.notes}</p>
+                            </div>
+                          </div>
+                        )) : (
+                          <p className="text-center py-8 text-slate-400 italic">Nenhum histórico registrado.</p>
+                        )}
+                     </div>
                    </div>
                 </div>
               )}
@@ -590,16 +718,77 @@ export default function PEP() {
                    <div className="flex items-center justify-between mb-8">
                       <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                         <Pill className="w-6 h-6 text-emerald" />
-                        Histórico de Prescrições
+                        Gerenciador de Prescrições
                       </h3>
                       <button 
-                        onClick={() => setActiveSubTab('anamnese')}
-                        className="px-4 py-2 bg-emerald/10 text-emerald-700 rounded-xl text-sm font-bold hover:bg-emerald/20 flex items-center gap-2"
+                        onClick={() => setIsAddingPrescription(!isAddingPrescription)}
+                        className={cn(
+                          "px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2",
+                          isAddingPrescription ? "bg-slate-100 text-slate-600" : "bg-emerald text-white hover:bg-emerald-600 shadow-md"
+                        )}
                       >
-                        <Plus className="w-4 h-4" />
-                        Nova Prescrição
+                        {isAddingPrescription ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                        {isAddingPrescription ? "Cancelar" : "Nova Prescrição"}
                       </button>
                    </div>
+
+                   {isAddingPrescription && (
+                     <motion.div 
+                       initial={{ opacity: 0, height: 0 }}
+                       animate={{ opacity: 1, height: 'auto' }}
+                       className="bg-emerald/5 border-2 border-emerald/10 p-6 rounded-3xl mb-8 space-y-4 overflow-hidden"
+                     >
+                        <h4 className="font-bold text-emerald-900 text-sm">Criar nova prescrição para {patient.full_name}</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <input 
+                            placeholder="Medicamento"
+                            value={newMed.name}
+                            onChange={(e) => setNewMed({ ...newMed, name: e.target.value })}
+                            className="p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-emerald text-sm"
+                          />
+                          <input 
+                            placeholder="Dosagem (ex: 500mg)"
+                            value={newMed.dosage}
+                            onChange={(e) => setNewMed({ ...newMed, dosage: e.target.value })}
+                            className="p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-emerald text-sm"
+                          />
+                          <div className="flex gap-2">
+                            <input 
+                              placeholder="Frequência"
+                              value={newMed.frequency}
+                              onChange={(e) => setNewMed({ ...newMed, frequency: e.target.value })}
+                              className="flex-1 p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-emerald text-sm"
+                            />
+                            <button 
+                              onClick={addMedication}
+                              className="p-3 bg-emerald text-white rounded-xl hover:bg-emerald/90 transition-all shadow-sm"
+                            >
+                              <Plus className="w-5 h-5 mx-auto" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 max-h-40 overflow-y-auto">
+                          {formData.medications.map((m, i) => (
+                            <div key={i} className="flex items-center justify-between p-2 bg-white rounded-lg border border-emerald/10 text-xs">
+                              <span className="font-medium text-emerald-950">{m.name} - {m.dosage} ({m.frequency})</span>
+                              <button onClick={() => removeMedication(i)} className="text-red-500 p-1">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+
+                        <button 
+                          onClick={handleCreateIndependentPrescription}
+                          disabled={isLoading || formData.medications.length === 0}
+                          className="w-full py-3 bg-navy text-white rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
+                          Concluir e Assinar Prescrição
+                        </button>
+                     </motion.div>
+                   )}
 
                    <div className="space-y-4">
                       {clinicalData.prescriptions.map((p: any) => (

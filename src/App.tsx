@@ -133,7 +133,7 @@ export default function App() {
       case 'admission':
         return <PatientAdmission />;
       case 'registry':
-        return <Registry />;
+        return <Registry setActiveTab={setActiveTab} />;
       case 'scheduling':
         return <Scheduling />;
       case 'triage':
