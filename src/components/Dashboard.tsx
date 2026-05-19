@@ -51,6 +51,7 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ user, setActiveTab }: DashboardProps) {
+  const [viewRole, setViewRole] = React.useState(user.role);
   const [stats, setStats] = React.useState({
     patientCount: 0,
     staffCount: 0,
@@ -67,6 +68,10 @@ export default function Dashboard({ user, setActiveTab }: DashboardProps) {
   const [isLoading, setIsLoading] = React.useState(true);
   const [isAlertModalOpen, setIsAlertModalOpen] = React.useState(false);
   const [alertType, setAlertType] = React.useState<'critical' | 'discharge' | null>(null);
+
+  React.useEffect(() => {
+    setViewRole(user.role);
+  }, [user.role]);
 
   React.useEffect(() => {
     const fetchDashboardData = async () => {
@@ -118,14 +123,14 @@ export default function Dashboard({ user, setActiveTab }: DashboardProps) {
           .from('exams')
           .select('*, patients(full_name)')
           .eq('status', 'pending')
-          .limit(10); // Mocking critical for now or use a 'result' check if schema allows
+          .limit(10); 
 
         const { data: occupiedBeds } = await supabase
           .from('beds')
           .select('*, patients(full_name)')
           .eq('status', 'occupied');
 
-        if (user.role === 'doctor') {
+        if (viewRole === 'doctor' || user.role === 'admin') {
           const { data: docApps } = await supabase
             .from('appointments')
             .select('*, patients(full_name)')
@@ -167,6 +172,7 @@ export default function Dashboard({ user, setActiveTab }: DashboardProps) {
         setStats(prev => ({
           ...prev,
           patientCount: pCount || 0,
+          stats: sCount || 0,
           staffCount: sCount || 0,
           criticalStock: cStock,
           triageStats: formattedTriage,
@@ -183,10 +189,35 @@ export default function Dashboard({ user, setActiveTab }: DashboardProps) {
     };
 
     fetchDashboardData();
-  }, [user.id, user.role]);
+  }, [user.id, user.role, viewRole]);
 
   const renderAdminDashboard = () => (
     <div className="space-y-8">
+      {/* Simulation Bar for Admin */}
+      <div className="bg-navy/5 p-2 rounded-2xl flex items-center gap-4 border border-navy/10 overflow-x-auto no-scrollbar">
+        <span className="text-[10px] font-black text-navy uppercase tracking-widest pl-4 shrink-0">Simular Visão:</span>
+        <div className="flex gap-2">
+          {[
+            { id: 'admin', label: 'Administrador' },
+            { id: 'doctor', label: 'Médico' },
+            { id: 'nurse', label: 'Enfermeiro' },
+            { id: 'reception', label: 'Recepção' }
+          ].map((r) => (
+            <button
+              key={r.id}
+              onClick={() => setViewRole(r.id)}
+              className={cn(
+                "px-4 py-1.5 rounded-xl text-[10px] font-bold uppercase transition-all shrink-0",
+                viewRole === r.id 
+                  ? "bg-navy text-white shadow-lg" 
+                  : "bg-white text-navy/40 hover:text-navy hover:bg-white"
+              )}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
           { label: 'Receita Mensal', value: isLoading ? '...' : `${(stats.monthlyRevenue / 1000000).toFixed(1)}M Kz`, icon: Wallet, trend: '+8%', color: 'text-emerald-600', bg: 'bg-emerald-50' },
@@ -508,7 +539,7 @@ export default function Dashboard({ user, setActiveTab }: DashboardProps) {
   );
 
   const renderContent = () => {
-    switch (user.role) {
+    switch (viewRole) {
       case 'admin': return renderAdminDashboard();
       case 'doctor': return renderDoctorDashboard();
       case 'nurse': return renderNurseDashboard();
@@ -522,7 +553,11 @@ export default function Dashboard({ user, setActiveTab }: DashboardProps) {
       <div className="flex items-end justify-between">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Painel de Controle</h1>
-          <p className="text-slate-500 mt-1">Bem-vindo ao SISA, {user.role === 'admin' ? 'Administrador' : user.role === 'doctor' ? 'Doutor' : user.role === 'nurse' ? 'Enfermeiro' : 'Atendente'}.</p>
+          <p className="text-slate-500 mt-1">
+            {viewRole !== user.role 
+              ? `Simulando visão de ${viewRole === 'doctor' ? 'Médico' : viewRole === 'nurse' ? 'Enfermeiro' : 'Atendente'}. (Você é Admin)`
+              : `Bem-vindo ao SISA, ${user.role === 'admin' ? 'Administrador' : user.role === 'doctor' ? 'Doutor' : user.role === 'nurse' ? 'Enfermeiro' : 'Atendente'}.`}
+          </p>
         </div>
         <div className="text-sm text-slate-400 font-medium">
           {new Date().toLocaleDateString('pt-AO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}

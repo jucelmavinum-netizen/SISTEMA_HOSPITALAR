@@ -57,12 +57,20 @@ export default function PEP() {
       if (invData) setInventory(invData);
       if (user) {
         setCurrentDoctor(user);
-        // Sync profile once on mount
-        await supabase.from('profiles').upsert({
-          id: user.id,
-          full_name: user.user_metadata?.full_name || user.email?.split('@')[0],
-          role: 'doctor'
-        }, { onConflict: 'id' });
+        // Only ensure profile exists, don't overwrite role if it's already set
+        const { data: existingProfile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+
+        if (!existingProfile) {
+          await supabase.from('profiles').upsert({
+            id: user.id,
+            full_name: user.user_metadata?.full_name || user.email?.split('@')[0],
+            role: user.user_metadata?.role || 'doctor'
+          }, { onConflict: 'id' });
+        }
       }
     };
     initData();

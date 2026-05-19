@@ -30,23 +30,77 @@ export default function App() {
 
   // Supabase Session Listener
   React.useEffect(() => {
-    const fetchProfile = async (userId: string) => {
-      const { data, error } = await supabase
+    const fetchProfile = async (userId: string, sessionUser: any) => {
+      let { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
       
-      if (data) {
-        setUser(data);
-        if (data.role === 'reception') setActiveTab('admission');
+      // 1. If profile doesn't exist in the database, create one from metadata
+      if (error || !profile) {
+        const { data: newProfile, error: createError } = await supabase
+          .from('profiles')
+          .update({
+            full_name: sessionUser.user_metadata?.full_name || sessionUser.email?.split('@')[0],
+            role: sessionUser.user_metadata?.role || 'reception',
+            hospital: 'Hospital Geral'
+          })
+          .eq('id', userId)
+          .select()
+          .single();
+        
+        // If update failed (non-existent), try insert (upsert)
+        if (createError || !newProfile) {
+          const { data: upsertedProfile } = await supabase
+            .from('profiles')
+            .upsert({
+              id: userId,
+              full_name: sessionUser.user_metadata?.full_name || sessionUser.email?.split('@')[0],
+              role: sessionUser.user_metadata?.role || 'reception',
+              hospital: 'Hospital Geral'
+            }, { onConflict: 'id' })
+            .select()
+            .single();
+          profile = upsertedProfile;
+        } else {
+          profile = newProfile;
+        }
+      }
+
+      // 2. Critical Role Synchronization: Always trust Auth Metadata as the source of truth for Roles
+      const metaRole = sessionUser.user_metadata?.role;
+      if (profile && metaRole && profile.role !== metaRole) {
+        const { data: updatedProfile, error: updateError } = await supabase
+          .from('profiles')
+          .update({ role: metaRole })
+          .eq('id', userId)
+          .select()
+          .single();
+        
+        if (!updateError && updatedProfile) {
+          profile = updatedProfile;
+        }
+      }
+
+      if (profile) {
+        setUser(profile);
+        if (profile.role === 'reception') setActiveTab('admission');
+      } else {
+        // 3. Last Resort Fallback (Metadata only)
+        setUser({
+          id: userId,
+          full_name: sessionUser.user_metadata?.full_name || sessionUser.email?.split('@')[0],
+          role: metaRole || 'reception',
+          hospital: 'Hospital Geral'
+        });
       }
       setIsLoading(false);
     };
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        fetchProfile(session.user.id);
+        fetchProfile(session.user.id, session.user);
       } else {
         setIsLoading(false);
       }
@@ -54,7 +108,7 @@ export default function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
-        fetchProfile(session.user.id);
+        fetchProfile(session.user.id, session.user);
       } else {
         setUser(null);
         setIsLoading(false);
