@@ -1,5 +1,6 @@
 {
   "name": "SISA - Sistema Integrado de Saúde de Angola",
   "description": "Sistema de gestão hospitalar focado em triagem dinâmica, histórico clínico unificado e gestão de enchentes.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
