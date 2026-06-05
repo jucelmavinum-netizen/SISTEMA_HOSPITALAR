@@ -20,7 +20,9 @@ import Statistics from './components/Statistics';
 import Finance from './components/Finance';
 import Scheduling from './components/Scheduling';
 import Laboratory from './components/Laboratory';
+import Imaging from './components/Imaging';
 import PEP from './components/PEP';
+import Telemedicine from './components/Telemedicine';
 
 export default function App() {
   const [activeTab, setActiveTab] = React.useState('dashboard');
@@ -152,8 +154,8 @@ export default function App() {
   }
 
   const permissions: Record<string, string[]> = {
-    admin: ['dashboard', 'admission', 'registry', 'scheduling', 'triage', 'pep', 'laboratory', 'beds', 'pharmacy', 'hr', 'tracking', 'stats', 'finance'],
-    doctor: ['dashboard', 'registry', 'scheduling', 'triage', 'pep', 'laboratory', 'beds'],
+    admin: ['dashboard', 'admission', 'registry', 'scheduling', 'triage', 'pep', 'laboratory', 'imaging', 'beds', 'pharmacy', 'hr', 'tracking', 'stats', 'finance', 'telemedicine'],
+    doctor: ['dashboard', 'registry', 'scheduling', 'triage', 'pep', 'laboratory', 'imaging', 'beds', 'telemedicine'],
     nurse: ['dashboard', 'admission', 'registry', 'triage', 'pep', 'beds', 'pharmacy', 'tracking'],
     reception: ['admission', 'registry', 'scheduling', 'finance']
   };
@@ -196,6 +198,10 @@ export default function App() {
         return <PEP />;
       case 'laboratory':
         return <Laboratory />;
+      case 'imaging':
+        return <Imaging />;
+      case 'telemedicine':
+        return <Telemedicine />;
       case 'beds':
         return <BedsManagement />;
       case 'pharmacy':

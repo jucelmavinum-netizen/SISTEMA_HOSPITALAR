@@ -20,7 +20,9 @@ import {
   Wallet,
   Calendar as CalendarIcon,
   FlaskConical,
-  ClipboardList
+  ClipboardList,
+  Video,
+  Image
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -78,9 +80,11 @@ export default function Layout({ children, activeTab, setActiveTab, isOffline, u
     { id: 'admission', label: 'Admissão de Pacientes', icon: UserPlus, roles: ['admin', 'nurse', 'reception'] },
     { id: 'registry', label: 'Registro e Biometria', icon: Fingerprint, roles: ['admin', 'doctor', 'nurse', 'reception'] },
     { id: 'scheduling', label: 'Agendamento', icon: CalendarIcon, roles: ['admin', 'doctor', 'reception'] },
+    { id: 'telemedicine', label: 'Telemedicina', icon: Video, roles: ['admin', 'doctor'] },
     { id: 'triage', label: 'Triagem Dinâmica', icon: Stethoscope, roles: ['admin', 'doctor', 'nurse'] },
     { id: 'pep', label: 'Prontuário (PEP)', icon: ClipboardList, roles: ['admin', 'doctor', 'nurse'] },
     { id: 'laboratory', label: 'Laboratório', icon: FlaskConical, roles: ['admin', 'doctor'] },
+    { id: 'imaging', label: 'Imagiologia Digital', icon: Image, roles: ['admin', 'doctor'] },
     { id: 'beds', label: 'Censo e Leitos', icon: BedDouble, roles: ['admin', 'doctor', 'nurse'] },
     { id: 'pharmacy', label: 'Farmácia e Stock', icon: Pill, roles: ['admin', 'nurse'] },
     { id: 'hr', label: 'Recursos Humanos', icon: Users, roles: ['admin'] },

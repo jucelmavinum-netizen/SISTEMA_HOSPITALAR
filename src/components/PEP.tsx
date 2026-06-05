@@ -18,12 +18,14 @@ import {
   ShieldCheck,
   Package,
   AlertTriangle,
-  X
+  X,
+  Image
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 import Modal from './ui/Modal';
+import Imaging from './Imaging';
 
 export default function PEP() {
   const [searchTerm, setSearchTerm] = React.useState('');
@@ -84,7 +86,7 @@ export default function PEP() {
     }
   }, []);
 
-  const [activeSubTab, setActiveSubTab] = React.useState<'history' | 'anamnese' | 'evolution' | 'prescription' | 'administration'>('history');
+  const [activeSubTab, setActiveSubTab] = React.useState<'history' | 'anamnese' | 'evolution' | 'prescription' | 'administration' | 'imaging'>('history');
 
   const [formData, setFormData] = React.useState({
     symptoms: '',
@@ -423,25 +425,26 @@ export default function PEP() {
           {/* Clinical Workspace */}
           <div className="lg:col-span-3 space-y-6">
             {/* Tabs */}
-            <div className="flex bg-white p-2 rounded-2xl border border-slate-200 shadow-sm gap-2">
+            <div className="flex bg-white p-2 rounded-2xl border border-slate-200 shadow-sm gap-2 flex-wrap sm:flex-nowrap">
               {[
                 { id: 'history', label: 'Histórico Completo', icon: History },
                 { id: 'anamnese', label: 'Nova Consulta', icon: Stethoscope },
                 { id: 'evolution', label: 'Evolução Diária', icon: Activity },
                 { id: 'prescription', label: 'Receituário', icon: Pill },
                 { id: 'administration', label: 'Administração', icon: ShieldCheck },
+                { id: 'imaging', label: 'Imagiologia', icon: Image },
               ].map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveSubTab(tab.id as any)}
                   className={cn(
-                    "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all",
+                    "flex-1 flex items-center justify-center gap-1.5 py-3 px-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap",
                     activeSubTab === tab.id 
                       ? "bg-navy text-white shadow-lg" 
                       : "text-slate-500 hover:bg-slate-50"
                   )}
                 >
-                  <tab.icon className="w-4 h-4" />
+                  <tab.icon className="w-3.5 h-3.5 shrink-0" />
                   {tab.label}
                 </button>
               ))}
@@ -847,6 +850,19 @@ export default function PEP() {
                          </div>
                       ))}
                    </div>
+                </div>
+              )}
+
+              {activeSubTab === 'imaging' && (
+                <div className="space-y-6">
+                  <div className="bg-sky-50/50 p-6 rounded-3xl border border-sky-100 flex items-center gap-4 mb-4">
+                    <Image className="w-8 h-8 text-sky-600 animate-pulse" />
+                    <div>
+                      <h3 className="font-bold text-sky-900">Exames de Imagem & PACS Integrado</h3>
+                      <p className="text-xs text-sky-700/80 font-medium">Estudos radiológicos, tomografias (TC), ecografias e ressonâncias magnéticas (RM) vinculados diretamente à ficha do paciente.</p>
+                    </div>
+                  </div>
+                  <Imaging patientId={patient.id} />
                 </div>
               )}
 

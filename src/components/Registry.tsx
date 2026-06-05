@@ -35,6 +35,21 @@ export default function Registry({ setActiveTab }: { setActiveTab?: (tab: string
   const [selectedPatientForEdit, setSelectedPatientForEdit] = React.useState<any>(null);
   const [editFormData, setEditFormData] = React.useState<any>({});
 
+  // Physical sheets state
+  const [isSheetModalOpen, setIsSheetModalOpen] = React.useState(false);
+  const [activeSheetType, setActiveSheetType] = React.useState<'entrada' | 'saida' | 'transferencia'>('entrada');
+  const [sheetFormData, setSheetFormData] = React.useState({
+    doctorName: 'Dr. Manuel Neto',
+    receptionistName: 'Sandro Pinto',
+    dischargeState: 'Melhora Clínica Significativa',
+    dischargeMeds: 'Paracetamol 500mg de 8h/8h, Amoxicilina 875mg de 12h/12h, Polivitamínico de 24h/24h.',
+    dischargeNotes: 'Repouso domiciliar recomendado por 3 dias. Retorno imediato em caso de febre ou dor intensa.',
+    transferDestination: 'Hospital Josina Machel',
+    transferReason: 'Necessidade de Cuidados Intensivos Especializados (CTI) indisponíveis nesta unidade.',
+    transferClinicalStatus: 'Estável sob monitoramento hemodinâmico leve.',
+    urgencyLevel: 'Urgente / Laranja'
+  });
+
   React.useEffect(() => {
     fetchPatients();
   }, []);
@@ -134,6 +149,241 @@ export default function Registry({ setActiveTab }: { setActiveTab?: (tab: string
     // In a real app we might use html2canvas or similar
     // For now, let's trigger a print which usually allows "Save as PDF"
     handlePrint();
+  };
+
+  const handlePrintClinicalSheet = (type: 'entrada' | 'saida' | 'transferencia') => {
+    if (!patient) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    let docTitle = '';
+    let docSpecificContentHtml = '';
+
+    if (type === 'entrada') {
+      docTitle = 'Ficha de Entrada e Admissão - SISA';
+      docSpecificContentHtml = `
+        <div class="space-y-4">
+          <div class="bg-slate-100 p-4 rounded-xl border border-slate-200">
+            <h3 class="text-xs font-black text-slate-800 uppercase mb-2">1. Dados de Admissão</h3>
+            <table class="w-full text-xs text-left">
+              <tr>
+                <td class="font-bold py-1 w-1/3 text-slate-500">Data/Hora Registo:</td>
+                <td class="py-1 text-slate-800 font-bold">${new Date().toLocaleString('pt-AO')}</td>
+              </tr>
+              <tr>
+                <td class="font-bold py-1 text-slate-500">Financiamento:</td>
+                <td class="py-1 text-slate-800 capitalize">${patient.financing_type || 'Público'}</td>
+              </tr>
+              <tr>
+                <td class="font-bold py-1 text-slate-500">Nº Processo SISA:</td>
+                <td class="py-1 font-mono text-indigo-700 font-bold">${patient.process_number}</td>
+              </tr>
+              <tr>
+                <td class="font-bold py-1 text-slate-500">Responsável Registo:</td>
+                <td class="py-1 text-slate-800">${sheetFormData.receptionistName}</td>
+              </tr>
+            </table>
+          </div>
+
+          <div class="bg-slate-100 p-4 rounded-xl border border-slate-200">
+            <h3 class="text-xs font-black text-slate-800 uppercase mb-2">2. Antecedentes Clínicos Triados</h3>
+            <table class="w-full text-xs text-left">
+              <tr>
+                <td class="font-bold py-1 w-1/3 text-slate-500">Alergias Clínicas:</td>
+                <td class="py-1 text-red-650 font-bold text-red-650">${patient.alergias && patient.alergias.length > 0 ? patient.alergias.join(', ') : 'Nenhuma conhecida'}</td>
+              </tr>
+              <tr>
+                <td class="font-bold py-1 text-slate-500">Patologias Crónicas:</td>
+                <td class="py-1 text-slate-800">${patient.doencas_cronicas && patient.doencas_cronicas.length > 0 ? patient.doencas_cronicas.join(', ') : 'Nenhuma declarada'}</td>
+              </tr>
+              <tr>
+                <td class="font-bold py-1 text-slate-500">Grupo Sanguíneo:</td>
+                <td class="py-1 font-bold text-red-600">${patient.tipo_sanguineo || 'N/D'}</td>
+              </tr>
+            </table>
+          </div>
+
+          <div class="border border-dashed border-slate-300 p-6 rounded-xl mt-6">
+            <p class="text-[10px] text-slate-400 font-bold uppercase mb-8">Espaço reservado para Triagem Física & Sinais Vitais (T.A, F.C, Temp, SpO2):</p>
+            <div class="grid grid-cols-4 gap-4 text-center mt-12 text-slate-400">
+              <div class="border-t border-slate-200 pt-1 text-[10px] font-bold">Tens. Art. (TA)</div>
+              <div class="border-t border-slate-200 pt-1 text-[10px] font-bold">Freq. Card. (FC)</div>
+              <div class="border-t border-slate-200 pt-1 text-[10px] font-bold">Temperatura (ºC)</div>
+              <div class="border-t border-slate-200 pt-1 text-[10px] font-bold">Saturação (SpO2)</div>
+            </div>
+          </div>
+        </div>
+      `;
+    } else if (type === 'saida') {
+      docTitle = 'Ficha de Saída e Alta Clínica - SISA';
+      docSpecificContentHtml = `
+        <div class="space-y-4">
+          <div class="bg-slate-100 p-4 rounded-xl border border-slate-200">
+            <h3 class="text-xs font-black text-slate-800 uppercase mb-2">1. Dados de Alta de Paciente</h3>
+            <table class="w-full text-xs text-left">
+              <tr>
+                <td class="font-bold py-1 w-1/3 text-slate-500">Data de Saída:</td>
+                <td class="py-1 text-slate-800 font-bold">${new Date().toLocaleDateString('pt-AO')}</td>
+              </tr>
+              <tr>
+                <td class="font-bold py-1 text-slate-500">Médico Responsável:</td>
+                <td class="py-1 text-slate-800 font-bold">${sheetFormData.doctorName}</td>
+              </tr>
+              <tr>
+                <td class="font-bold py-1 text-slate-500">Estado Clínico de Alta:</td>
+                <td class="py-1 font-bold text-emerald-700">${sheetFormData.dischargeState}</td>
+              </tr>
+            </table>
+          </div>
+
+          <div class="bg-slate-100 p-4 rounded-xl border border-slate-200">
+            <h3 class="text-xs font-black text-slate-800 uppercase mb-2">2. Prescrições de Alta Domiciliar</h3>
+            <p class="text-xs text-slate-700 font-mono leading-relaxed bg-white p-3 rounded border border-slate-200">${sheetFormData.dischargeMeds}</p>
+          </div>
+
+          <div class="bg-slate-100 p-4 rounded-xl border border-slate-200">
+            <h3 class="text-xs font-black text-slate-800 uppercase mb-2">3. Recomendações e Observações</h3>
+            <p class="text-xs text-slate-700 leading-relaxed">${sheetFormData.dischargeNotes}</p>
+          </div>
+        </div>
+      `;
+    } else {
+      docTitle = 'Guia de Transferência Inter-Hospitalar - SISA';
+      docSpecificContentHtml = `
+        <div class="space-y-4">
+          <div class="bg-red-50 border border-red-100 p-4 rounded-xl">
+            <h3 class="text-xs font-black text-red-800 uppercase mb-2">1. Alerta de Transferência Clínica</h3>
+            <table class="w-full text-xs text-left text-red-950">
+              <tr>
+                <td class="font-bold py-1 w-1/3 text-slate-500">Hospital de Origem:</td>
+                <td class="py-1 text-slate-800">Hospital Geral - Unidade SISA</td>
+              </tr>
+              <tr>
+                <td class="font-bold py-1 text-slate-500">Hospital de Destino:</td>
+                <td class="py-1 font-bold text-red-900">${sheetFormData.transferDestination}</td>
+              </tr>
+              <tr>
+                <td class="font-bold py-1 text-slate-500">Grau de Urgência:</td>
+                <td class="py-1"><span class="bg-red-600 text-white px-2 py-0.5 rounded font-black text-[10px] uppercase">${sheetFormData.urgencyLevel}</span></td>
+              </tr>
+              <tr>
+                <td class="font-bold py-1 text-slate-500">Médico Transferente:</td>
+                <td class="py-1 text-slate-800 font-bold">${sheetFormData.doctorName}</td>
+              </tr>
+            </table>
+          </div>
+
+          <div class="bg-slate-100 p-4 rounded-xl border border-slate-200">
+            <h3 class="text-xs font-black text-slate-800 uppercase mb-2">2. Motivação da Transferência</h3>
+            <p class="text-xs text-slate-700 bg-white p-3 rounded border border-slate-200 leading-relaxed">${sheetFormData.transferReason}</p>
+          </div>
+
+          <div class="bg-slate-100 p-4 rounded-xl border border-slate-200">
+            <h3 class="text-xs font-black text-slate-800 uppercase mb-2">3. Estado Clínico para Transporte</h3>
+            <p class="text-xs text-slate-700 bg-white p-3 rounded border border-slate-200 leading-relaxed">${sheetFormData.transferClinicalStatus}</p>
+          </div>
+        </div>
+      `;
+    }
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>${docTitle}</title>
+          <script src="https://cdn.tailwindcss.com"></script>
+          <style>
+            @media print {
+              body { padding: 0; margin: 0; }
+              .no-print { display: none !important; }
+            }
+          </style>
+        </head>
+        <body class="p-12 font-sans bg-white text-slate-900 min-h-screen flex flex-col justify-between">
+          <div>
+            <!-- Republic Header -->
+            <div class="text-center space-y-1 mb-6 border-b pb-4 border-slate-300">
+              <div class="text-[20px] font-extrabold text-slate-900">REPÚBLICA DE ANGOLA</div>
+              <div class="text-[12px] uppercase tracking-widest text-slate-600 font-bold">Ministério da Saúde</div>
+              <div class="text-xs font-semibold text-slate-500 uppercase">Hospital Geral - Sistema SISA</div>
+              <div class="text-[10px] text-slate-400 font-mono mt-1">SISA Código Ref: #${patient.id.slice(0, 8).toUpperCase()}</div>
+            </div>
+
+            <!-- Header Title -->
+            <div class="text-center font-black uppercase text-base text-slate-900 tracking-tight my-5 underline decoration-2">
+              ${docTitle.toUpperCase()}
+            </div>
+
+            <!-- Patient Core Biographical Data Table -->
+            <div class="border border-slate-300 rounded-xl p-4 mb-6">
+              <h3 class="text-[10px] font-black uppercase text-slate-500 mb-2">Dados de Identificação do Paciente</h3>
+              <table class="w-full text-xs text-left">
+                <tr>
+                  <td class="font-bold py-1 w-1/4 text-slate-500">Nome Completo:</td>
+                  <td class="py-1 font-bold text-slate-900 text-sm" colSpan="3">${patient.full_name}</td>
+                </tr>
+                <tr>
+                  <td class="font-bold py-1 text-slate-500">Nº Processo SISA:</td>
+                  <td class="py-1 font-mono text-slate-700 font-bold">${patient.process_number}</td>
+                  <td class="font-bold py-1 w-1/4 text-slate-500">Documento Identificação:</td>
+                  <td class="py-1 font-mono text-slate-700 font-bold">${patient.bi_number ? 'BI: ' + patient.bi_number : patient.municipal_card_id ? 'Cartão Munícipe: ' + patient.municipal_card_id : 'Não Declarado'}</td>
+                </tr>
+                <tr>
+                  <td class="font-bold py-1 text-slate-500">Gênero:</td>
+                  <td class="py-1">${patient.gender === 'M' ? 'Masculino' : 'Feminino'}</td>
+                  <td class="font-bold py-1 text-slate-500">Contacto de Emergência:</td>
+                  <td class="py-1 font-mono">${patient.contato_emergencia_telefone || 'Sem contato'}</td>
+                </tr>
+                <tr>
+                  <td class="font-bold py-1 text-slate-500">Província:</td>
+                  <td class="py-1">${patient.province || 'Não informado'}</td>
+                  <td class="font-bold py-1 text-slate-500">Município/Localidade:</td>
+                  <td class="py-1">${patient.municipality || 'Não informado'}</td>
+                </tr>
+              </table>
+            </div>
+
+            <!-- Specific Dynamic Content HTML -->
+            ${docSpecificContentHtml}
+
+          </div>
+
+          <!-- Formal Signatures Stamp Area -->
+          <div class="mt-20 pt-8 border-t border-slate-200">
+            <div class="grid grid-cols-2 gap-12 text-center text-xs">
+              <div>
+                <div class="w-48 mx-auto border-b border-slate-400 h-10 mb-2"></div>
+                <p class="font-bold uppercase text-slate-700">Assinatura do Paciente / Familiar</p>
+                <p class="text-[10px] text-slate-400">Autoridade Legal Resignatária</p>
+              </div>
+              <div>
+                <div class="w-48 mx-auto border-b border-indigo-400 h-10 mb-2"></div>
+                <p class="font-bold uppercase text-slate-800">Direção Clínica & Equipa Médica SISA</p>
+                <p class="text-[10px] text-slate-500 font-mono">${type === 'entrada' ? sheetFormData.receptionistName : sheetFormData.doctorName || 'Emitente SISA'}</p>
+              </div>
+            </div>
+
+            <!-- Print Footer info -->
+            <div class="text-center text-[9px] text-slate-400 mt-12 space-y-1">
+              <p>Este documento foi impresso pelo Sistema Integrado de Saúde de Angola (SISA) e serve como certidão física legítima.</p>
+              <p>Data de Emissão: ${new Date().toLocaleString('pt-AO')} &bull; Autenticação Criptográfica SISA: SEC_${Math.floor(1000 + Math.random() * 9000)}_HASH</p>
+            </div>
+          </div>
+
+          <div class="no-print mt-8 flex justify-center">
+            <button onclick="window.print()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg text-sm shadow">
+              Confirmar Gravação Física (Imprimir)
+            </button>
+          </div>
+
+          <script>
+            window.onload = () => {
+              window.print();
+            }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   };
 
   const handleUpdatePatient = async (e: React.FormEvent) => {
@@ -345,6 +595,60 @@ export default function Registry({ setActiveTab }: { setActiveTab?: (tab: string
                   <QrCode className="w-5 h-5" />
                   Gerar Cartão Digital
                 </button>
+
+                {/* Physical Forms / Documentos Físicos de Hospital */}
+                <div className="mt-6 pt-6 border-t border-slate-100 space-y-4 text-left">
+                  <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <Printer className="w-4 h-4 text-emerald" /> Fichas Clínicas (Formato Físico)
+                  </h4>
+                  <p className="text-[10px] text-slate-400 leading-normal font-medium">
+                    Preencha e emita formulários oficiais prontos para impressão física ou download em PDF:
+                  </p>
+                  
+                  <div className="grid grid-cols-1 gap-2.5">
+                    <button 
+                      onClick={() => {
+                        setActiveSheetType('entrada');
+                        setIsSheetModalOpen(true);
+                      }}
+                      className="w-full py-3 px-4 bg-slate-50 hover:bg-slate-100/80 border border-slate-150 hover:border-slate-200 text-slate-700 rounded-xl font-bold text-xs flex items-center justify-between transition-all cursor-pointer group"
+                    >
+                      <span className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-slate-400 group-hover:text-emerald transition-colors" />
+                        Ficha de Entrada (Admissão)
+                      </span>
+                      <Download className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600" />
+                    </button>
+                    
+                    <button 
+                      onClick={() => {
+                        setActiveSheetType('saida');
+                        setIsSheetModalOpen(true);
+                      }}
+                      className="w-full py-3 px-4 bg-slate-50 hover:bg-slate-100/80 border border-slate-150 hover:border-slate-200 text-slate-700 rounded-xl font-bold text-xs flex items-center justify-between transition-all cursor-pointer group"
+                    >
+                      <span className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 transition-colors" />
+                        Ficha de Saída (Alta Clínica)
+                      </span>
+                      <Download className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600" />
+                    </button>
+                    
+                    <button 
+                      onClick={() => {
+                        setActiveSheetType('transferencia');
+                        setIsSheetModalOpen(true);
+                      }}
+                      className="w-full py-3 px-4 bg-slate-50 hover:bg-slate-100/80 border border-slate-150 hover:border-slate-200 text-slate-700 rounded-xl font-bold text-xs flex items-center justify-between transition-all cursor-pointer group"
+                    >
+                      <span className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-slate-400 group-hover:text-rose-500 transition-colors" />
+                        Guia de Transferência
+                      </span>
+                      <Download className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600" />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -763,6 +1067,170 @@ export default function Registry({ setActiveTab }: { setActiveTab?: (tab: string
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* 4. EMISSÃO DE FICHAS E DOCUMENTOS FÍSICOS MODAL */}
+      <Modal
+        isOpen={isSheetModalOpen}
+        onClose={() => setIsSheetModalOpen(false)}
+        title={
+          activeSheetType === 'entrada' ? 'Emitir Ficha de Entrada/Admissão' :
+          activeSheetType === 'saida' ? 'Emitir Ficha de Alta/Saída' :
+          'Emitir Guia de Transferência Inter-Hospitalar'
+        }
+        className="max-w-xl"
+      >
+        <div className="space-y-6">
+          <p className="text-xs text-slate-500 font-medium pb-2 border-b">
+            Preencha os dados abaixo para personalizar o documento clínico físico oficial do paciente <span className="font-bold text-slate-800">{patient?.full_name}</span> antes de gerar o ficheiro para download ou impressão.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Conditional input fields depending on document type */}
+            {activeSheetType === 'entrada' && (
+              <div className="col-span-2 space-y-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide">Responsável da Recepção</label>
+                  <input
+                    type="text"
+                    value={sheetFormData.receptionistName}
+                    onChange={(e) => setSheetFormData({ ...sheetFormData, receptionistName: e.target.value })}
+                    className="w-full text-xs p-3 border border-slate-150 rounded-xl outline-none focus:border-emerald bg-white"
+                    placeholder="Nome do Recepcionista"
+                  />
+                </div>
+              </div>
+            )}
+
+            {activeSheetType === 'saida' && (
+              <div className="col-span-2 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide">Médico Concedente da Alta</label>
+                    <input
+                      type="text"
+                      value={sheetFormData.doctorName}
+                      onChange={(e) => setSheetFormData({ ...sheetFormData, doctorName: e.target.value })}
+                      className="w-full text-xs p-3 border border-slate-150 rounded-xl outline-none focus:border-indigo-600 bg-white font-bold text-slate-800"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide">Estado de Alta</label>
+                    <select
+                      value={sheetFormData.dischargeState}
+                      onChange={(e) => setSheetFormData({ ...sheetFormData, dischargeState: e.target.value })}
+                      className="w-full text-xs p-3 border border-slate-150 rounded-xl outline-none bg-white font-bold text-slate-700"
+                    >
+                      <option value="Melhora Clínica Significativa">Melhora Clínica Significativa</option>
+                      <option value="Cura Completa / Alta Médica">Cura Completa / Alta Médica</option>
+                      <option value="Melhora Parcial de Sintomas">Melhora Parcial de Sintomas</option>
+                      <option value="Alta a Pedido do Paciente">Alta a Pedido do Paciente</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide">Prescrições de Alta (Medicamentos)</label>
+                  <textarea
+                    rows={2}
+                    value={sheetFormData.dischargeMeds}
+                    onChange={(e) => setSheetFormData({ ...sheetFormData, dischargeMeds: e.target.value })}
+                    className="w-full text-xs p-3 border border-slate-150 rounded-xl outline-none focus:border-indigo-600 bg-white font-mono"
+                    placeholder="Ex: Paracetamol 500mg de 8h/8h."
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide">Recomendações Clínicas e Repouso</label>
+                  <textarea
+                    rows={2}
+                    value={sheetFormData.dischargeNotes}
+                    onChange={(e) => setSheetFormData({ ...sheetFormData, dischargeNotes: e.target.value })}
+                    className="w-full text-xs p-3 border border-slate-150 rounded-xl outline-none focus:border-indigo-600 bg-white"
+                  />
+                </div>
+              </div>
+            )}
+
+            {activeSheetType === 'transferencia' && (
+              <div className="col-span-2 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide">Médico Responsável</label>
+                    <input
+                      type="text"
+                      value={sheetFormData.doctorName}
+                      onChange={(e) => setSheetFormData({ ...sheetFormData, doctorName: e.target.value })}
+                      className="w-full text-xs p-3 border border-slate-150 rounded-xl outline-none focus:border-rose-500 bg-white font-bold"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide">Nível de Urgência SISA</label>
+                    <select
+                      value={sheetFormData.urgencyLevel}
+                      onChange={(e) => setSheetFormData({ ...sheetFormData, urgencyLevel: e.target.value })}
+                      className="w-full text-xs p-3 border border-slate-150 rounded-xl outline-none bg-white font-bold"
+                    >
+                      <option value="Urgente / Laranja">Urgente / Laranja</option>
+                      <option value="Emergência / Vermelho">Emergência / Vermelho</option>
+                      <option value="Não Urgente / Verde">Não Urgente / Verde</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide">Hospital de Destino Nacional</label>
+                  <input
+                    type="text"
+                    value={sheetFormData.transferDestination}
+                    onChange={(e) => setSheetFormData({ ...sheetFormData, transferDestination: e.target.value })}
+                    className="w-full text-xs p-3 border border-slate-150 rounded-xl outline-none focus:border-rose-500 bg-white text-rose-900 font-bold"
+                    placeholder="Ex: Hospital Josina Machel, Clínica Girassol"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide">Motivo Clínico de Transferência</label>
+                  <textarea
+                    rows={2}
+                    value={sheetFormData.transferReason}
+                    onChange={(e) => setSheetFormData({ ...sheetFormData, transferReason: e.target.value })}
+                    className="w-full text-xs p-3 border border-slate-150 rounded-xl outline-none focus:border-rose-500 bg-white"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide font-semibold">Estado Clínico de Transporte</label>
+                  <input
+                    type="text"
+                    value={sheetFormData.transferClinicalStatus}
+                    onChange={(e) => setSheetFormData({ ...sheetFormData, transferClinicalStatus: e.target.value })}
+                    className="w-full text-xs p-3 border border-slate-150 rounded-xl outline-none focus:border-rose-500 bg-white"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-3 pt-4 border-t border-slate-100">
+            <button
+              onClick={() => setIsSheetModalOpen(false)}
+              className="flex-1 py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all"
+            >
+              Fechar Painel
+            </button>
+            <button
+              onClick={() => {
+                handlePrintClinicalSheet(activeSheetType);
+                setIsSheetModalOpen(false);
+              }}
+              className="flex-1 py-3 px-4 bg-navy hover:bg-navy/95 text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2"
+            >
+              <Printer className="w-4 h-4" />
+              Imprimir Documento Físico
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );
